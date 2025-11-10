@@ -1,11 +1,4 @@
 import { useRouter } from 'expo-router';
-import {
-    createUserWithEmailAndPassword,
-    signInWithEmailAndPassword,
-    updateProfile,
-    UserCredential,
-} from 'firebase/auth';
-import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import React, { useState } from 'react';
 import {
     ActivityIndicator,
@@ -18,146 +11,124 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
-import { auth, db } from './firebase';
+
+// Visual-first sign in / sign up screen. Behavior is placeholder-only and will
+// navigate to the camera screen after a short simulated delay.
 
 export default function LoginScreen() {
   const router = useRouter();
-  const [mode, setMode] = useState<'signup' | 'signin'>('signup');
+  const [mode, setMode] = useState<'signup' | 'signin'>('signin');
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const onSuccess = (user: UserCredential) => {
-    console.log('Auth success, uid=', user.user.uid);
-    // Navigate to the camera home (root index)
-    router.replace('/App');
-  };
-
-  const onSubmit = async () => {
-    if (!auth) {
-      alert('Firebase not initialized. Check app/firebase.ts');
-      return;
-    }
-
+  const onSubmitPlaceholder = () => {
     setLoading(true);
-    try {
-      if (mode === 'signup') {
-        if (!username.trim()) {
-          alert('Please enter a username.');
-          setLoading(false);
-          return;
-        }
-        if (password.length < 6) {
-          alert('Password must be at least 6 characters.');
-          setLoading(false);
-          return;
-        }
-        if (password !== confirm) {
-          alert('Passwords do not match.');
-          setLoading(false);
-          return;
-        }
-        const user = await createUserWithEmailAndPassword(auth, email, password);
-        // Update displayName on the Firebase Auth user
-        try {
-          if (auth.currentUser) {
-            await updateProfile(auth.currentUser, { displayName: username });
-          }
-        } catch (profileErr) {
-          console.log('updateProfile failed', profileErr);
-        }
-        // Save a user record in Firestore
-        try {
-          if (db) {
-            await setDoc(doc(db, 'users', user.user.uid), {
-              uid: user.user.uid,
-              email: user.user.email,
-              displayName: username,
-              createdAt: serverTimestamp(),
-            });
-          }
-        } catch (dbErr) {
-          console.log('Failed to write user to Firestore', dbErr);
-        }
-        onSuccess(user);
-      } else {
-        const user = await signInWithEmailAndPassword(auth, email, password);
-        onSuccess(user);
-      }
-    } catch (e: any) {
-      console.log('Auth error', e);
-      alert(e?.message ?? 'Authentication failed');
-    } finally {
+    // Simulate a short network/auth delay
+    setTimeout(() => {
       setLoading(false);
-    }
+      // Navigate to camera screen (App)
+      router.replace('/App');
+    }, 700);
   };
 
   return (
     <SafeAreaView style={styles.outer}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.container}
+        style={styles.wrapper}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <View style={styles.card}>
-          <Text style={styles.welcomePre}>Welcome to</Text>
-          <Text style={styles.welcomeMain}>Stride.</Text>
+        <View style={styles.cardContainer}>
+          <View style={styles.card}>
+            <Text style={styles.titleSmall}>{mode === 'signup' ? 'Create your Account' : 'Sign in to your Account'}</Text>
+            <Text style={styles.titleLarge}>Welcome to{`\n`}<Text style={styles.stride}>Stride.</Text></Text>
 
-          <Text style={styles.subtitle}>{mode === 'signup' ? 'Create your Account' : 'Sign in to your Account'}</Text>
+            <Text style={styles.subtitle}>{mode === 'signup' ? 'Create your Account' : 'Sign in to your Account'}</Text>
 
-          {mode === 'signup' && (
-            <TextInput
-              placeholder="Username"
-              style={styles.input}
-              value={username}
-              onChangeText={setUsername}
-            />
-          )}
-
-          <TextInput
-            placeholder="Email"
-            style={styles.input}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            value={email}
-            onChangeText={setEmail}
-          />
-
-          <TextInput
-            placeholder="Password"
-            style={styles.input}
-            secureTextEntry
-            value={password}
-            onChangeText={setPassword}
-          />
-
-          {mode === 'signup' && (
-            <TextInput
-              placeholder="Confirm Password"
-              style={styles.input}
-              secureTextEntry
-              value={confirm}
-              onChangeText={setConfirm}
-            />
-          )}
-
-          <TouchableOpacity style={styles.button} onPress={onSubmit} disabled={loading}>
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.buttonText}>{mode === 'signup' ? 'Create Account' : 'Sign In'}</Text>
+            {mode === 'signup' && (
+              <TextInput
+                placeholder="Email"
+                style={styles.input}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                value={email}
+                onChangeText={setEmail}
+              />
             )}
-          </TouchableOpacity>
 
-          <View style={styles.bottomBar}>
-            <Text style={styles.bottomText}>
-              {mode === 'signup' ? 'Already have an account? ' : "Don't have an account? "}
-            </Text>
-            <TouchableOpacity onPress={() => setMode(mode === 'signup' ? 'signin' : 'signup')}>
-              <Text style={styles.signInLink}>{mode === 'signup' ? 'Sign In' : 'Create Account'}</Text>
+            {mode === 'signup' && (
+              <TextInput
+                placeholder="Password"
+                style={styles.input}
+                secureTextEntry
+                value={password}
+                onChangeText={setPassword}
+              />
+            )}
+
+            {mode === 'signup' && (
+              <TextInput
+                placeholder="Confirm Password"
+                style={styles.input}
+                secureTextEntry
+                value={confirm}
+                onChangeText={setConfirm}
+              />
+            )}
+
+            {mode === 'signin' && (
+              <>
+                <TextInput
+                  placeholder="Email"
+                  style={styles.input}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  value={email}
+                  onChangeText={setEmail}
+                />
+                <TextInput
+                  placeholder="Password"
+                  style={styles.input}
+                  secureTextEntry
+                  value={password}
+                  onChangeText={setPassword}
+                />
+                <TouchableOpacity style={styles.forgot} onPress={() => { /* placeholder */ }}>
+                  <Text style={styles.forgotText}>Forgot Password?</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            <TouchableOpacity style={styles.primaryButton} onPress={onSubmitPlaceholder} disabled={loading}>
+              {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{mode === 'signup' ? 'Create Account' : 'Sign In'}</Text>}
             </TouchableOpacity>
+
+            {mode === 'signin' && (
+              <Text style={styles.orLabel}>Or sign in with</Text>
+            )}
+
+            {mode === 'signin' && (
+              <View style={styles.socialRow}>
+                <TouchableOpacity style={styles.socialBtn} onPress={() => { /* placeholder */ }}>
+                  <Text style={styles.socialLabel}>G</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.socialBtn} onPress={() => { /* placeholder */ }}>
+                  <Text style={styles.socialLabel}></Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
+        </View>
+
+        <View style={styles.footerBand}>
+          <Text style={styles.footerText}>
+            {mode === 'signup' ? 'Already have an account? ' : "Don't have an account? "}
+            <Text style={styles.footerLink} onPress={() => setMode(mode === 'signup' ? 'signin' : 'signup')}>
+              {mode === 'signup' ? 'Sign In' : 'Create Account'}
+            </Text>
+          </Text>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -166,24 +137,27 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   outer: { flex: 1, backgroundColor: '#d9d2d2' },
-  container: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  wrapper: { flex: 1 },
+  cardContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   card: {
-    width: '86%',
+    width: '88%',
     backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 28,
+    borderRadius: 10,
+    paddingVertical: 28,
+    paddingHorizontal: 22,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
+    shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.08,
     shadowRadius: 20,
     elevation: 6,
   },
-  welcomePre: { fontSize: 20, color: '#666', marginBottom: 6 },
-  welcomeMain: { fontSize: 40, fontWeight: '800', color: '#1b1b1b', marginBottom: 8 },
-  subtitle: { color: '#888', marginBottom: 18 },
+  titleSmall: { color: '#8b8585', fontSize: 14, marginBottom: 8 },
+  titleLarge: { fontSize: 36, fontWeight: '800', color: '#111' },
+  stride: { color: '#2f9a4a' },
+  subtitle: { color: '#8a8a8a', marginTop: 16, marginBottom: 12 },
   input: {
     backgroundColor: '#fff',
-    borderRadius: 10,
+    borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 16,
     marginBottom: 12,
@@ -194,15 +168,40 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.03,
     shadowRadius: 12,
   },
-  button: {
+  forgot: { alignSelf: 'flex-end', marginBottom: 6 },
+  forgotText: { color: '#9aa0a6', fontSize: 12 },
+  primaryButton: {
     backgroundColor: '#2f9a4a',
     paddingVertical: 14,
     borderRadius: 10,
     alignItems: 'center',
     marginTop: 8,
   },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  bottomBar: { flexDirection: 'row', marginTop: 18, justifyContent: 'center', alignItems: 'center' },
-  bottomText: { color: '#222' },
-  signInLink: { color: '#2f9a4a', marginLeft: 6 },
+  primaryButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  orLabel: { textAlign: 'center', color: '#999', marginTop: 12, marginBottom: 8 },
+  socialRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  socialBtn: {
+    width: 140,
+    height: 48,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.03,
+    shadowRadius: 12,
+  },
+  socialLabel: { fontSize: 18 },
+  footerBand: {
+    height: 72,
+    backgroundColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  footerText: { color: '#fff' },
+  footerLink: { color: '#2f9a4a', fontWeight: '600' },
 });
+
+

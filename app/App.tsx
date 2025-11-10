@@ -133,6 +133,17 @@ export default function App(): JSX.Element {
                 </View>
               </View>
             </Modal>
+                        {/* Bottom navigation bar (visual only, no functionality) */}
+                        <View style={styles.bottomBar} pointerEvents="box-none">
+                            <View style={styles.bottomBarInner}>
+                                <View style={styles.navIcon}>
+                                    <Text style={styles.navIconText}>⚙️</Text>
+                                </View>
+                                <View style={styles.navIcon}>
+                                    <Text style={styles.navIconText}>👤</Text>
+                                </View>
+                            </View>
+                        </View>
         </View>
     );
 }
@@ -175,5 +186,38 @@ const styles = StyleSheet.create({
         borderRadius: 10,
         alignItems: 'center',
     }
+    ,
+    // bottom navigation styles
+    bottomBar: {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        bottom: 0,
+        height: 96,
+        backgroundColor: '#000',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 22,
+    },
+    bottomBarInner: {
+        width: '100%',
+        paddingHorizontal: 36,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    navIcon: {
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        backgroundColor: '#2f9a4a',
+        alignItems: 'center',
+        justifyContent: 'center',
+        elevation: 6,
+    },
+    navIconText: {
+        fontSize: 24,
+        color: '#fff',
+    },
 });
 
