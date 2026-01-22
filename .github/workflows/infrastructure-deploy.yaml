@@ -71,8 +71,8 @@ on:
 
   # Temprorary trigger for testing
   push:
-    paths:
-      - '.github/workflows/infrastructure-deploy.yaml'
+    branches:
+      - '**'
   # Push trigger for CDK-only changes (commented out until implemented)
   # push:
   #   branches:
