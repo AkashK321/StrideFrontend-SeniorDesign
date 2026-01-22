@@ -64,6 +64,12 @@ on:
       - 'aws_resources/backend/**'
   workflow_dispatch:
 
+# Permissions required for test-reporter to create check runs
+permissions:
+  contents: read
+  checks: write      # Required for test-reporter to create check runs
+  pull-requests: write  # Required for PR comments (if test-reporter adds them)
+
 # Prevent multiple concurrent runs on the same branch
 concurrency:
   group: backend-build-${{ github.ref }}
