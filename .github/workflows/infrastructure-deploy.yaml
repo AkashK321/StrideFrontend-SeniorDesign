@@ -68,7 +68,11 @@ on:
         required: true
         type: string
         description: 'Name of the JAR artifact to download'
-  
+
+  # Temprorary trigger for testing
+  push:
+    paths:
+      - '.github/workflows/infrastructure-deploy.yaml'
   # Push trigger for CDK-only changes (commented out until implemented)
   # push:
   #   branches:
