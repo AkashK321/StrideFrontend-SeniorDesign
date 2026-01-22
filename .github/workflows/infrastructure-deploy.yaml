@@ -113,6 +113,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
+
       # Step 2: Download JAR artifact from backend-build workflow
       # COMMENTED OUT: For testing with manually placed JAR file
       # When integrated with backend-build, uncomment this step
@@ -135,7 +136,9 @@ jobs:
           echo "✅ JAR verified:"
           ls -lh build/libs/kotlin_app-1.0-all.jar
       
+
       # Step 4: Set up Python for CDK
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -321,4 +324,6 @@ jobs:
           echo "📋 Stack Outputs:"
           echo $OUTPUTS | jq '.'
         continue-on-error: true
+=======
+>>>>>>> 41475b5 (finds JAR and sets up python)
       
