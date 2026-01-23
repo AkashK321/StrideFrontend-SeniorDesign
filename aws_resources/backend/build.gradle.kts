@@ -8,7 +8,6 @@
 plugins {
     kotlin("jvm") version "1.9.23"
     id("com.github.johnrengelman.shadow") version "8.1.1"
-    id("org.jlleitschuh.gradle.ktlint") version "12.1.0"
 }
 
 group = "com.example"
@@ -44,29 +43,4 @@ tasks.shadowJar {
 
 tasks.test {
     useJUnitPlatform()
-}
-
-// Configure ktlint
-ktlint {
-    version.set("1.1.1")
-    enableExperimentalRules.set(true)
-    ignoreFailures.set(false)
-    filter {
-        exclude("**/generated/**")
-        exclude("**/build/**")
-    }
-}
-
-// Task to run lint check (for CI)
-tasks.register("lint") {
-    dependsOn("ktlintCheck")
-    description = "Run ktlint check"
-    group = "verification"
-}
-
-// Task to auto-fix linting issues (for local development)
-tasks.register("lintFix") {
-    dependsOn("ktlintFormat")
-    description = "Auto-fix ktlint issues"
-    group = "verification"
 }

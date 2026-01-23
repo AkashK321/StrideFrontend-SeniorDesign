@@ -11,12 +11,14 @@
 # TRIGGERS:
 #   1. Called by backend-build (workflow_call):
 #      - PRIMARY TRIGGER: Only after successful build and unit tests
-#      - Automatically triggered when backend-build completes successfully
+#      - Automatically triggered when backend-build completes successfully on push events
 #      - Inputs: branch_name, jar_artifact_name
 #      - Branch name handling:
 #        * Push events: Uses the branch that was pushed
-#        * PR events: Uses the PR's source branch (head ref) for branch-specific stack
+#        * Main branch: Deploys to production stack (StrideStack)
+#        * Feature branches: Deploys to branch-specific stack
 #      - Downloads JAR artifact from backend-build and deploys everything
+#      - NOTE: PRs are handled separately by pr-validation.yaml (no deployment)
 
 #   2. Manual trigger (workflow_dispatch):
 #      - Can be run manually with branch_name input
