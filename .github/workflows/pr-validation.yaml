@@ -7,11 +7,14 @@
 #   deployment. This provides quick feedback on PRs without the overhead of
 #   deploying to AWS.
 #
+#   NOTE: Linting will be added to this workflow in the future.
+#
 # TRIGGERS:
 #   1. Pull request events:
 #      - Types: opened, synchronize, reopened
 #      - Paths: aws_resources/**, .github/workflows/**
 #      - Runs: Build + Unit Tests
+#      - TODO: Linting will be added later
 #      - NO deployment (prevents duplicate branch stack deployments)
 #
 # WORKFLOW FLOW:
@@ -26,9 +29,14 @@
 # OUTPUTS:
 #   - Build status (success/failure)
 #   - Test results
+#   - TODO: Lint results (to be added)
 #
 # DEPENDENCIES:
 #   - None (standalone PR validation workflow)
+#
+# FUTURE ENHANCEMENTS:
+#   - Add linting job (ktlint) to validate code style
+#   - Linting is already configured in build.gradle.kts but not yet run in CI
 #
 # ============================================================================
 
