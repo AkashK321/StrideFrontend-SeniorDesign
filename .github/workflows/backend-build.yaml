@@ -11,17 +11,14 @@
 #   1. Push event when backend code or workflow changes:
 #      - Paths: aws_resources/**, .github/workflows/**
 #      - Branches: All branches (**)
-#      - Deploys infrastructure (branch stacks for features, production for main)
-#   2. Pull request to main when backend code changes:
-#      - Paths: aws_resources/**, .github/workflows/**
-#      - Branches: main only (protected integration branch)
-#      - Runs full pipeline: build + test + deploy branch stack + integration tests
-#      - Deploys to the PR's source branch stack (not main)
-#   3. Manual trigger (workflow_dispatch):
+#      - Runs full pipeline: build + test + deploy + integration tests
+#      - Feature branches: Deploy to branch-specific stack
+#      - Main branch: Deploy to production stack
+#   2. Manual trigger (workflow_dispatch):
 #      - Can be run manually from GitHub Actions UI
 #
 # WORKFLOW FLOW:
-#   Push Event OR Pull Request (backend/** changed)
+#   Push Event (backend/** changed)
 #       ↓
 #   backend-build runs
 #       ↓
@@ -64,13 +61,6 @@ on:
     paths:
       - 'aws_resources/**'
       - '.github/workflows/**'
-  pull_request:
-    types: [opened, synchronize, reopened]
-    branches:
-      - main
-    paths:
-      - 'aws_resources/**'
-      - '.github/workflows/**'
   workflow_dispatch:
 
 # Permissions required for test-reporter and called workflows
@@ -81,9 +71,8 @@ permissions:
   id-token: write    # Required for called workflow (infrastructure-deploy) to use OIDC
 
 # Prevent multiple concurrent runs on the same branch
-# Use branch name for both push and PR events to prevent duplicates
 concurrency:
-  group: backend-build-${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
+  group: backend-build-${{ github.ref_name }}
   cancel-in-progress: true
 
 
@@ -185,14 +174,13 @@ jobs:
   deploy:
     name: Call Infrastructure Deploy
     needs: [build, unit-tests]
-    # Deploy on both push and pull_request events
-    # - Push: deploys to the branch that was pushed
-    # - PR: deploys to the PR's source branch (head ref) for testing
+    # Deploy on push events
+    # - Feature branches: Deploy to branch-specific stack
+    # - Main branch: Deploy to production stack
     if: success()
     uses: ./.github/workflows/infrastructure-deploy.yaml
     with:
-      # For PRs, use the source branch (head ref); for push, use the branch name
-      branch_name: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref_name }}
+      branch_name: ${{ github.ref_name }}
       jar_artifact_name: ${{ needs.build.outputs.artifact_name }}
     secrets: inherit
   
