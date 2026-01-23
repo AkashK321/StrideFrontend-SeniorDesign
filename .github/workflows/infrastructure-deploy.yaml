@@ -186,18 +186,48 @@ jobs:
             BRANCH_NAME="${GITHUB_REF#refs/heads/}"
           fi
           
-          # Sanitize branch name for CloudFormation (alphanumeric and hyphens only, must start with letter)
-          # Convert to lowercase, replace invalid chars with hyphens, remove leading/trailing hyphens
-          SANITIZED=$(echo "$BRANCH_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g' | sed 's/^-\+//' | sed 's/-\+$//' | cut -c1-100)
+          # Sanitize branch name for CloudFormation stack naming
+          # Assumes branch format: <issue_number>-<description>
+          # Strategy: Extract issue number, truncate description to 20 chars max
           
-          # Ensure it starts with a letter (prepend 'branch-' if it starts with a number)
-          if [[ "$SANITIZED" =~ ^[0-9] ]]; then
-            SANITIZED="branch-$SANITIZED"
+          # Convert to lowercase and extract parts
+          BRANCH_LOWER=$(echo "$BRANCH_NAME" | tr '[:upper:]' '[:lower:]')
+          
+          # Extract issue number (digits at start before first hyphen)
+          if [[ "$BRANCH_LOWER" =~ ^([0-9]+)- ]]; then
+            ISSUE_NUM="${BASH_REMATCH[1]}"
+            # Extract description (everything after issue number and hyphen)
+            DESCRIPTION="${BRANCH_LOWER#${ISSUE_NUM}-}"
+            # Sanitize description: alphanumeric and hyphens only, truncate to 20 chars
+            DESCRIPTION=$(echo "$DESCRIPTION" | sed 's/[^a-z0-9-]/-/g' | sed 's/^-\+//' | sed 's/-\+$//' | cut -c1-20)
+            
+            # Build sanitized name: issue-description (if description exists)
+            if [ -n "$DESCRIPTION" ] && [ "$DESCRIPTION" != "-" ]; then
+              SANITIZED="${ISSUE_NUM}-${DESCRIPTION}"
+            else
+              SANITIZED="${ISSUE_NUM}"
+            fi
+          else
+            # Branch doesn't match expected format, use full sanitization
+            # Convert to lowercase, replace invalid chars with hyphens, remove leading/trailing hyphens
+            SANITIZED=$(echo "$BRANCH_LOWER" | sed 's/[^a-z0-9-]/-/g' | sed 's/^-\+//' | sed 's/-\+$//' | cut -c1-100)
+            
+            # Ensure it starts with a letter (prepend 'branch-' if it starts with a number)
+            if [[ "$SANITIZED" =~ ^[0-9] ]]; then
+              SANITIZED="branch-${SANITIZED:0:93}"  # Leave room for 'branch-' prefix
+            fi
           fi
           
           # If empty or just hyphens, use 'default'
           if [ -z "$SANITIZED" ] || [ "$SANITIZED" = "-" ]; then
             SANITIZED="default"
+          fi
+          
+          # Final stack name: StrideStack-{sanitized}
+          # Max length: 12 (prefix) + 116 (sanitized) = 128 chars (CloudFormation limit)
+          # But we keep it shorter for readability: max 100 chars for sanitized part
+          if [ ${#SANITIZED} -gt 100 ]; then
+            SANITIZED="${SANITIZED:0:100}"
           fi
           
           STACK_NAME="StrideStack-${SANITIZED}"
