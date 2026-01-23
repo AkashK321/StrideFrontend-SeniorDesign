@@ -65,6 +65,7 @@ on:
       - 'aws_resources/**'
       - '.github/workflows/**'
   pull_request:
+    types: [opened, synchronize, reopened]
     branches:
       - main
     paths:
