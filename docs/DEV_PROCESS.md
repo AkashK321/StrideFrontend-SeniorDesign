@@ -1,9 +1,32 @@
 # Development Process Documentation
 
 ## Table of Contents
+
 1. [Repository Architecture](#repository-architecture)
-2. [Branching / Workflow Model](#workflow-and-branching-strategy)
+   - [Overview](#overview)
+   - [Repository Structure](#repository-structure)
+   - [Standards & Documentation References](#standards--documentation-references)
+     - [Frontend](#frontend)
+     - [Backend](#backend)
+
+2. [Workflow and Branching Strategy](#workflow-and-branching-strategy)
+   - [Workflow](#workflow)
+   - [Branches](#branches)
+     - [`main`](#main)
+     - [Feature Branches](#feature-branches)
+   - [Creating an Issue](#creating-an-issue)
+   - [Creating a New Feature Branch](#creating-a-new-feature-branch)
+   - [Tags](#tags)
+
 3. [Code Development & Review Policy](#code-development--review-policy)
+   - [Pull Request Requirements](#pull-request-requirements)
+     - [PR Creation Checklist](#pr-creation-checklist)
+   - [Code Review Process](#code-review-process)
+     - [Reviewer Assignment](#reviewer-assignment)
+     - [Review Criteria](#review-criteria)
+     - [Review Feedback](#review-feedback)
+     - [Code Review Frequency](#code-review-frequency)
+     - [Branch Maintenance](#branch-maintenance)
 
 
 
@@ -82,6 +105,7 @@ This project uses a **Feature Branch Workflow** with a single main integration b
 3. **Development**
    - Make commits with clear, descriptive messages
    - Push branch to remote repository
+
    ```
    git push origin <branch-name>
    ```
@@ -97,6 +121,8 @@ This project uses a **Feature Branch Workflow** with a single main integration b
 5. **Merge**
    - After approval and passing CI/CD, merge via "Squash and Merge" or "Rebase and Merge"
    - Delete feature branch after merge
+
+___
 
 ### Branches
 
@@ -144,6 +170,8 @@ All feature branches must follow this naming pattern:
 - `bug/456-fix-camera-permissions`
 - `fix/789-security-patch`
 
+___
+
 ### Creating an Issue
 
 When creating a new GitHub issue, follow these guidelines:
@@ -162,6 +190,8 @@ When creating a new GitHub issue, follow these guidelines:
 6. Add appropriate labels and tags (see [Tags](#tags) section)
 
 **Note:** The tag you use in the issue title should match the tag you use when creating the corresponding branch (e.g., if the issue is titled `feature: add image upload`, create a branch with `feature/` prefix).
+
+---
 
 ### Creating a New Feature Branch
 
@@ -203,6 +233,8 @@ Follow these steps to create a new feature branch:
 - Always create branches from `main` to ensure you have the latest code
 - Use the `-u` flag when pushing to set up tracking between local and remote branches
 - The branch will automatically trigger CI/CD workflows and deploy to a branch-specific stack
+
+---
 
 ### Tags
 
