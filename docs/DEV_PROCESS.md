@@ -12,7 +12,7 @@
 2. [Workflow and Branching Strategy](#workflow-and-branching-strategy)
    - [Workflow](#workflow)
    - [Branches](#branches)
-     - [`main`](#main)
+     - [Main](#main)
      - [Feature Branches](#feature-branches)
    - [Creating an Issue](#creating-an-issue)
    - [Creating a New Feature Branch](#creating-a-new-feature-branch)
@@ -126,7 +126,7 @@ ___
 
 ### Branches
 
-#### `main`
+#### Main
 - **Purpose**: Production-ready code and stable releases
 - **Protection**: Protected branch requiring PR approval and CI/CD checks
 - **Merge Policy**: Only via Pull Requests that pass all checks
