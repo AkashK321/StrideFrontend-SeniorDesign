@@ -91,6 +91,10 @@ on:
         type: string
         description: 'Name of the JAR artifact to download (optional)'
 
+# Permissions required for OIDC (OpenID Connect) authentication
+permissions:
+  id-token: write  # Required for OIDC to request JWT token
+  contents: read   # Required to checkout code
 
 jobs:
   deploy:
@@ -180,12 +184,11 @@ jobs:
       # CloudWatch Logs (for Lambda logging):
       #   - logs:CreateLogGroup, logs:DeleteLogGroup, logs:DescribeLogGroups
       #
-      # Note: For production, consider using least-privilege IAM policies or OIDC role assumption
+      # Note: Using OIDC role assumption (no long-lived access keys required)
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: us-east-1
       
       # Step 8: Check if CDK is bootstrapped
