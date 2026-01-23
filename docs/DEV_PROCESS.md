@@ -5,7 +5,7 @@
 2. [Branching / Workflow Model](#branching--workflow-model)
 3. [Code Development & Review Policy](#code-development--review-policy)
 
----
+
 
 ## Repository Architecture
 
@@ -17,48 +17,55 @@ This repository follows a full-stack architecture pattern with a React Native/Ex
 
 ```
 Stride/
-│
-├── app/                          # Frontend: React Native/Expo application
-│   ├── _layout.tsx              # Root layout component
-│   ├── App.tsx                  # Main application component
-│   └── index.tsx                # Entry point
-│
-├── backend/                     # Backend: AWS Serverless functions
-│   ├── functions/               # Lambda function handlers
-│   │   ├── image-processing/   # Image processing Lambda
-│   │   └── api-handlers/       # API Gateway integration handlers
-│   ├── lib/                     # Shared backend libraries
-│   └── config/                  # Backend configuration files
-│
-├── infrastructure/              # Infrastructure as Code
-│   ├── template.yaml           # AWS SAM/CloudFormation template
-│   ├── samconfig.toml          # SAM CLI configuration
-│   └── parameters/             # Environment-specific parameters
-│
-├── tests/                       # Test suites
-│   ├── unit/                   # Unit tests
-│   ├── integration/            # Integration tests
-│   └── e2e/                    # End-to-end tests
-│
-├── assets/                      # Static assets (images, icons, etc.)
-│   └── images/                 # Image assets
-│
-├── doc/                         # Documentation
-│   └── DEV_PROCESS.md          # This file
-│
-├── .github/                     # GitHub configuration
-│   ├── workflows/              # CI/CD workflows
-│   └── PULL_REQUEST_TEMPLATE.md # PR template
-│
-├── app.json                     # Expo configuration
-├── package.json                 # Frontend dependencies
-├── tsconfig.json                # TypeScript configuration
-├── eslint.config.js             # ESLint configuration
-└── README.md                    # Project overview
+├── .gitignore
+├── README.md                        # Entry point documentation
+├── aws_resources/                   # Backend Infrastructure & Logic
+│   ├── app.py                       # AWS CDK App Entry Point (Python)
+│   ├── cdk.json                     # CDK Context & Config
+│   ├── requirements.txt             # Python Dependencies (CDK)
+│   ├── source.bat                   # Environment setup script
+│   ├── backend/                     # Business Logic (Lambda Functions)
+│   │   ├── build.gradle.kts         # Kotlin Build Configuration
+│   │   ├── settings.gradle.kts
+│   │   └── src/main/kotlin/
+│   │       └── com/handler/
+│   │           └── Handler.kt       # Lambda Handler Entry Point
+│   ├── cdk/                         # Infrastructure Definitions
+│   │   └── cdk_stack.py             # Main CloudFormation Stack Definition
+│   ├── schema_initializer/          # Database Migration/Setup
+│   │   ├── handler.py
+│   │   └── verify_db_init.py
+│   └── tests/                       # Infrastructure Tests
+│       └── unit/
+│           └── test_cdk_stack.py
+├── docs/                            # Project Documentation
+│   ├── BackendSetup.md
+│   ├── FrontendSetup.md
+│   ├── Design_Document.pdf
+│   └── DEV_PROCESS.md
+└── frontend/                        # Mobile Application (React Native/Expo)
+    ├── app.json                     # Expo Configuration
+    ├── package.json                 # JS Dependencies
+    ├── tsconfig.json                # TypeScript Configuration
+    ├── app/                         # Application Screens & Routing
+    │   ├── _layout.tsx              # Root Layout & Navigation Wrapper
+    │   ├── index.tsx                # Home/Landing Screen
+    │   ├── login.tsx                # Authentication Screen
+    │   └── firebase.ts              # Firebase Configuration
+    ├── assets/                      # Static Assets (Images/Fonts)
+    │   └── images/
+    └── .vscode/                     # Editor Settings
 
 ```
 
-___
+### Standards & Documentation References
+#### Frontend
+Our frontend is built using React Native with Expo. We follow the file structure detailed by Expo Router for organizing screens and navigation. For more information, refer to the [Expo Router Documentation](https://docs.expo.dev/router/introduction/).
+
+#### Backend
+The backend infrastructure is created using AWS CDK in Python with the core backend lambda handler created in Kotlin to achieve better runtime performance. 
+We follow the best practices for AWS CDK projects as outlined in their [documentation](https://docs.aws.amazon.com/cdk/v2/guide/best-practices.html)
+
 
 ## Branching Strategy
 
@@ -197,7 +204,7 @@ Reviewers should check for:
 - **Clean Up**: Delete merged branches promptly
 - **Naming**: Use descriptive branch names that indicate purpose
 
----
+
 
 ## Additional Resources
 
@@ -209,6 +216,6 @@ Reviewers should check for:
 ---
 
 **Document Version**: 1.0  
-**Last Updated**: 2024  
+**Last Updated**: 2026 \
 **Maintained By**: Stride Development Team
 
