@@ -103,7 +103,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      # Step 2: Verify JAR exists in backend/build/libs/
+      # Step 2: Download JAR artifact from backend-build workflow
+      # COMMENTED OUT: For testing with manually placed JAR file
+      # When integrated with backend-build, uncomment this step
+      # - name: Download JAR artifact
+      #   uses: actions/download-artifact@v4
+      #   with:
+      #     name: ${{ inputs.jar_artifact_name || 'kotlin-app-jar' }}
+      #     path: aws_resources/backend/build/libs/
+      #   continue-on-error: true
+      
+      # Step 3: Verify JAR exists in backend/build/libs/
       - name: Verify JAR exists
         working-directory: aws_resources/backend
         run: |
@@ -115,9 +125,168 @@ jobs:
           echo "✅ JAR verified:"
           ls -lh build/libs/kotlin_app-1.0-all.jar
       
-      # Step 3: Set up Python for CDK
+      # Step 4: Set up Python for CDK
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      
+      # Step 5: Install Python dependencies
+      - name: Install Python dependencies
+        working-directory: aws_resources
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      # Step 6: Install CDK
+      - name: Install CDK
+        run: npm install -g aws-cdk
+      
+      # Step 7: Configure AWS credentials
+      # REQUIRED AWS PERMISSIONS for the IAM user/role:
+      # 
+      # CDK Bootstrap Operations:
+      #   - s3:CreateBucket, s3:PutObject, s3:GetObject, s3:DeleteObject (for CDK assets bucket)
+      #   - iam:CreateRole, iam:AttachRolePolicy, iam:PutRolePolicy (for CDK execution roles)
+      #   - iam:PassRole (to pass roles to CloudFormation)
+      #   - cloudformation:CreateStack, cloudformation:UpdateStack, cloudformation:DescribeStacks (for CDKToolkit stack)
+      #   - sts:GetCallerIdentity (for account verification)
+      #
+      # CloudFormation Operations:
+      #   - cloudformation:CreateStack, cloudformation:UpdateStack, cloudformation:DeleteStack
+      #   - cloudformation:DescribeStacks, cloudformation:DescribeStackEvents, cloudformation:DescribeStackResources
+      #   - cloudformation:GetTemplate, cloudformation:ValidateTemplate
+      #   - cloudformation:ListStackResources
+      #
+      # Lambda Operations:
+      #   - lambda:CreateFunction, lambda:UpdateFunctionCode, lambda:UpdateFunctionConfiguration
+      #   - lambda:GetFunction, lambda:ListFunctions, lambda:DeleteFunction
+      #   - lambda:AddPermission, lambda:RemovePermission (for API Gateway integration)
+      #   - lambda:PutFunctionEventInvokeConfig (for SnapStart configuration)
+      #
+      # API Gateway Operations:
+      #   - apigateway:POST, apigateway:GET, apigateway:PUT, apigateway:DELETE, apigateway:PATCH (for REST API resources)
+      #   - apigateway:CreateRestApi, apigateway:GetRestApi, apigateway:UpdateRestApi, apigateway:DeleteRestApi
+      #   - apigateway:CreateResource, apigateway:GetResource, apigateway:DeleteResource
+      #   - apigateway:PutMethod, apigateway:GetMethod, apigateway:DeleteMethod
+      #   - apigateway:PutIntegration, apigateway:GetIntegration, apigateway:DeleteIntegration
+      #   - apigateway:CreateDeployment, apigateway:GetDeployment
+      #
+      # IAM Operations (for Lambda execution roles):
+      #   - iam:CreateRole, iam:GetRole, iam:DeleteRole
+      #   - iam:AttachRolePolicy, iam:DetachRolePolicy, iam:PutRolePolicy, iam:DeleteRolePolicy
+      #   - iam:PassRole (to attach roles to Lambda functions)
+      #
+      # CloudWatch Logs (for Lambda logging):
+      #   - logs:CreateLogGroup, logs:DeleteLogGroup, logs:DescribeLogGroups
+      #
+      # Note: For production, consider using least-privilege IAM policies or OIDC role assumption
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      
+      # Step 8: Check if CDK is bootstrapped
+      - name: Check CDK bootstrap
+        id: cdk-bootstrap
+        run: |
+          if aws cloudformation describe-stacks --stack-name CDKToolkit --region us-east-1 2>/dev/null | grep -q "CDKToolkit"; then
+            echo "✅ CDK already bootstrapped"
+            echo "bootstrapped=true" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️ CDK not bootstrapped, will bootstrap now"
+            echo "bootstrapped=false" >> $GITHUB_OUTPUT
+          fi
+        continue-on-error: true
+      
+      # Step 9: Bootstrap CDK if needed
+      - name: Bootstrap CDK
+        if: steps.cdk-bootstrap.outcome == 'failure' || steps.cdk-bootstrap.outputs.bootstrapped == 'false'
+        working-directory: aws_resources
+        run: |
+          cdk bootstrap aws://${{ secrets.AWS_ACCOUNT_ID }}/us-east-1
+      
+      # Step 10: Sanitize branch name for CloudFormation stack name
+      - name: Sanitize branch name
+        id: sanitize-branch
+        run: |
+          # Get branch name from input (workflow_call/workflow_dispatch) or GitHub context (push event)
+          # For push events, extract branch name from GITHUB_REF (e.g., refs/heads/feature-branch -> feature-branch)
+          if [ -n "${{ inputs.branch_name }}" ]; then
+            BRANCH_NAME="${{ inputs.branch_name }}"
+          else
+            BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+          fi
+          
+          # Sanitize branch name for CloudFormation (alphanumeric and hyphens only, must start with letter)
+          # Convert to lowercase, replace invalid chars with hyphens, remove leading/trailing hyphens
+          SANITIZED=$(echo "$BRANCH_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g' | sed 's/^-\+//' | sed 's/-\+$//' | cut -c1-100)
+          
+          # Ensure it starts with a letter (prepend 'branch-' if it starts with a number)
+          if [[ "$SANITIZED" =~ ^[0-9] ]]; then
+            SANITIZED="branch-$SANITIZED"
+          fi
+          
+          # If empty or just hyphens, use 'default'
+          if [ -z "$SANITIZED" ] || [ "$SANITIZED" = "-" ]; then
+            SANITIZED="default"
+          fi
+          
+          STACK_NAME="StrideStack-${SANITIZED}"
+          
+          echo "Branch name: $BRANCH_NAME"
+          echo "Sanitized branch: $SANITIZED"
+          echo "Stack name: $STACK_NAME"
+          echo "sanitized_branch=$SANITIZED" >> $GITHUB_OUTPUT
+          echo "stack_name=$STACK_NAME" >> $GITHUB_OUTPUT
+      
+      # Step 11: Deploy CDK stack with branch-specific name
+      - name: Deploy CDK stack
+        id: deploy
+        working-directory: aws_resources
+        env:
+          CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
+          CDK_DEFAULT_REGION: us-east-1
+          BRANCH_NAME: ${{ steps.sanitize-branch.outputs.sanitized_branch }}
+          STACK_NAME: ${{ steps.sanitize-branch.outputs.stack_name }}
+        run: |
+          # Deploy with branch-specific stack name using CDK context
+          cdk deploy --require-approval never --all --context branchName=$BRANCH_NAME --context stackName=$STACK_NAME
+      
+      # Step 12: Get stack outputs
+      - name: Get stack outputs
+        id: stack-outputs
+        working-directory: aws_resources
+        run: |
+          # Use the branch-specific stack name
+          STACK_NAME="${{ steps.sanitize-branch.outputs.stack_name }}"
+          
+          # Get stack outputs using AWS CLI
+          OUTPUTS=$(aws cloudformation describe-stacks \
+            --stack-name $STACK_NAME \
+            --region us-east-1 \
+            --query 'Stacks[0].Outputs' \
+            --output json)
+          
+          # Extract specific outputs if they exist
+          API_ENDPOINT=$(echo $OUTPUTS | jq -r '.[] | select(.OutputKey=="APIEndpoint") | .OutputValue // empty')
+          STACK_ID=$(echo $OUTPUTS | jq -r '.[] | select(.OutputKey=="StackId") | .OutputValue // empty')
+          
+          # Set outputs for use in subsequent steps or workflow outputs
+          if [ -n "$API_ENDPOINT" ]; then
+            echo "api_endpoint=$API_ENDPOINT" >> $GITHUB_OUTPUT
+            echo "✅ API Endpoint: $API_ENDPOINT"
+          fi
+          
+          if [ -n "$STACK_ID" ]; then
+            echo "stack_id=$STACK_ID" >> $GITHUB_OUTPUT
+            echo "✅ Stack ID: $STACK_ID"
+          fi
+          
+          # Display all outputs
+          echo "📋 Stack Outputs:"
+          echo $OUTPUTS | jq '.'
+        continue-on-error: true
       
