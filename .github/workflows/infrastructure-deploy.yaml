@@ -57,8 +57,6 @@
 
 name: Infrastructure Deploy
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 on:
   workflow_call:
     inputs:
