@@ -11,6 +11,26 @@ java -version
 kotlinc -version
 gradle -version
 ```
+To install python dependencies, run:
+```bash
+pip install -r requirements.txt
+```
+Note: you should notice files from the pg8000 package installed to ../aws_resources/schema_initializer, this is because the lambda environment can't install this package at runtime.
+
 Note: gradle -version should show something like this:  
 Launcher JVM:  21.0.9 (Microsoft 21.0.9+10-LTS)  
 Daemon JVM:    C:\Program Files\Java\jdk-21.0.9.10-hotspot (no JDK specified, using current Java home)  
+
+# Deploying Changes
+To deploy changes to the backend, run the following command from the aws_resources directory:
+```bash
+cdk deploy
+```
+
+# Database Specific Setup
+Be careful when making changes to the database schema, the current initialization script will clean up the old database completely if any updates are made.
+The schema_initializer lambda is triggered on creation of the lambda and on update. You can also manually trigger it through the test window within the AWS Lambda console.
+To verify the databse schema after making any changes, run the following command from the aws_resources/schema_initializer directory:
+```bash
+python verify_db_init.py
+```
