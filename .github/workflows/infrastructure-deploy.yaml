@@ -49,7 +49,7 @@
 # OUTPUTS:
 #   - Stack name:
 #     * Main branch: "StrideStack" (production stack)
-#     * Feature branches: "StrideStack-{issue_number}-{description}" (branch-specific)
+#     * Feature branches: "StrideStack-{issue_number}-{<100 char description}" (branch-specific)
 #   - API Gateway endpoint URL
 #   - Stack status
 #   - Deployment timestamp
