@@ -115,7 +115,7 @@ jobs:
         uses: dorny/test-reporter@v1
         with:
           name: Integration Test Results
-          path: aws_resources/backend/tests/test-results/integration-tests.xml
+          path: aws_resources/test-results/integration-tests.xml
           reporter: java-junit
           fail-on-error: false
           list-suites: all
