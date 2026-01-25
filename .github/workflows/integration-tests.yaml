@@ -10,13 +10,12 @@
 # TRIGGERS:
 #   1. Called by infrastructure-deploy (workflow_call):
 #      - PRIMARY TRIGGER: Automatically triggered after successful stack deployment
-#      - Receives: api_endpoint, stack_name, branch_name
+#      - Receives: api_endpoint
 #      - Runs integration tests against the deployed stack
 #   2. Manual trigger (workflow_dispatch):
 #      - Can be run manually with required inputs:
 #        * api_endpoint: API Gateway endpoint URL
-#        * stack_name: CloudFormation stack name
-#        * branch_name: Branch name for context
+
 #
 # WORKFLOW FLOW:
 #   workflow_call OR workflow_dispatch
@@ -53,14 +52,6 @@ on:
         required: true
         type: string
         description: 'API Gateway endpoint URL'
-      stack_name:
-        required: true
-        type: string
-        description: 'CloudFormation stack name'
-      branch_name:
-        required: true
-        type: string
-        description: 'Branch name for context'
   
   workflow_dispatch:
     inputs:
@@ -68,14 +59,6 @@ on:
         required: true
         type: string
         description: 'API Gateway endpoint URL'
-      stack_name:
-        required: true
-        type: string
-        description: 'CloudFormation stack name'
-      branch_name:
-        required: true
-        type: string
-        description: 'Branch name for context'
 
 jobs:
   cleanup:
