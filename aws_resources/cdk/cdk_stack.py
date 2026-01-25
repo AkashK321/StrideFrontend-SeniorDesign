@@ -16,11 +16,15 @@ from aws_cdk import (
     aws_iam as iam,
     aws_s3 as s3,
     aws_sagemaker as sagemaker,
+    aws_s3_assets as s3_assets,
 )
 from constructs import Construct
 import os
 import subprocess
 import platform
+import tarfile
+import tempfile
+import shutil
 
 class CdkStack(Stack):
 
@@ -154,13 +158,42 @@ class CdkStack(Stack):
         ]
 
         # Standard PyTorch Inference Image (for us-east-1)
-        # Note: In a real production app, we'd use the sagemaker.ContainerImage.from_asset or similar
-        # For this benchmark, we'll assume a standard PyTorch environment.
-        image_uri = f"763104351884.dkr.ecr.us-east-1.amazonaws.com/pytorch-inference:2.1.0-cpu-py310-ubuntu20.04-sagemaker"
+        image_uri = "763104351884.dkr.ecr.us-east-1.amazonaws.com/pytorch-inference:2.1.0-cpu-py310-ubuntu20.04-sagemaker"
 
+        # Create model.tar.gz files for each model and upload to S3
+        benchmarking_dir = os.path.join(this_dir, "..", "benchmarking")
+        
         for model_info in models_to_benchmark:
             m_name = model_info["name"]
             m_instance = model_info["instance"]
+
+            # Create a temporary directory to build the model artifact
+            temp_dir = tempfile.mkdtemp()
+            code_dir = os.path.join(temp_dir, "code")
+            os.makedirs(code_dir)
+            
+            # Copy inference.py to the code directory
+            shutil.copy(
+                os.path.join(benchmarking_dir, "inference.py"),
+                os.path.join(code_dir, "inference.py")
+            )
+            
+            # Copy requirements.txt to the code directory
+            shutil.copy(
+                os.path.join(benchmarking_dir, "requirements.txt"),
+                os.path.join(code_dir, "requirements.txt")
+            )
+            
+            # Create the model.tar.gz file
+            tar_path = os.path.join(temp_dir, "model.tar.gz")
+            with tarfile.open(tar_path, "w:gz") as tar:
+                tar.add(code_dir, arcname="code")
+            
+            # Upload the model artifact using S3 Asset
+            model_asset = s3_assets.Asset(
+                self, f"ModelAsset-{m_name}",
+                path=tar_path
+            )
 
             # Define the SageMaker Model
             sm_model = sagemaker.CfnModel(
@@ -168,12 +201,17 @@ class CdkStack(Stack):
                 execution_role_arn=sagemaker_role.role_arn,
                 primary_container=sagemaker.CfnModel.ContainerDefinitionProperty(
                     image=image_uri,
-                    model_data_url=f"s3://{model_bucket.bucket_name}/models/{m_name}/model.tar.gz",
+                    model_data_url=model_asset.s3_object_url,
                     environment={
-                        "MODEL_TYPE": m_name # Passes 'yolov11-nano', etc.
+                        "MODEL_TYPE": m_name,
+                        "SAGEMAKER_PROGRAM": "inference.py",
+                        "SAGEMAKER_SUBMIT_DIRECTORY": "/opt/ml/model/code"
                     }
                 )
             )
+            
+            # Grant SageMaker role access to read the model artifact
+            model_asset.grant_read(sagemaker_role)
 
             # Define the Endpoint Config
             sm_config = sagemaker.CfnEndpointConfig(
