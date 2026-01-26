@@ -1,11 +1,32 @@
 # Development Process Documentation
 
 ## Table of Contents
-1. [Repository Architecture](#repository-architecture)
-2. [Branching Strategy](#branching-strategy)
-3. [Code Development & Review Policy](#code-development--review-policy)
 
----
+1. [Repository Architecture](#repository-architecture)
+   - [Overview](#overview)
+   - [Repository Structure](#repository-structure)
+   - [Standards & Documentation References](#standards--documentation-references)
+     - [Frontend](#frontend)
+     - [Backend](#backend)
+
+2. [Workflow and Branching Strategy](#workflow-and-branching-strategy)
+   - [Workflow](#workflow)
+   - [Branches](#branches)
+     - [Main](#main)
+     - [Feature Branches](#feature-branches)
+   - [Creating an Issue](#creating-an-issue)
+   - [Creating a New Feature Branch](#creating-a-new-feature-branch)
+   - [Tags](#tags)
+
+3. [Code Development & Review Policy](#code-development--review-policy)
+   - [Pull Request Requirements](#pull-request-requirements)
+     - [PR Creation Checklist](#pr-creation-checklist)
+   - [Code Review Process](#code-review-process)
+     - [Reviewer Assignment](#reviewer-assignment)
+     - [Review Criteria](#review-criteria)
+     - [Review Feedback](#review-feedback)
+     - [Code Review Frequency](#code-review-frequency)
+     - [Branch Maintenance](#branch-maintenance)
 
 ## Repository Architecture
 
@@ -17,97 +38,82 @@ This repository follows a full-stack architecture pattern with a React Native/Ex
 
 ```
 Stride/
-│
-├── app/                          # Frontend: React Native/Expo application
-│   ├── _layout.tsx              # Root layout component
-│   ├── App.tsx                  # Main application component
-│   └── index.tsx                # Entry point
-│
-├── backend/                     # Backend: AWS Serverless functions
-│   ├── functions/               # Lambda function handlers
-│   │   ├── image-processing/   # Image processing Lambda
-│   │   └── api-handlers/       # API Gateway integration handlers
-│   ├── lib/                     # Shared backend libraries
-│   └── config/                  # Backend configuration files
-│
-├── infrastructure/              # Infrastructure as Code
-│   ├── template.yaml           # AWS SAM/CloudFormation template
-│   ├── samconfig.toml          # SAM CLI configuration
-│   └── parameters/             # Environment-specific parameters
-│
-├── tests/                       # Test suites
-│   ├── unit/                   # Unit tests
-│   ├── integration/            # Integration tests
-│   └── e2e/                    # End-to-end tests
-│
-├── assets/                      # Static assets (images, icons, etc.)
-│   └── images/                 # Image assets
-│
-├── doc/                         # Documentation
-│   └── DEV_PROCESS.md          # This file
-│
-├── .github/                     # GitHub configuration
-│   ├── workflows/              # CI/CD workflows
-│   └── PULL_REQUEST_TEMPLATE.md # PR template
-│
-├── app.json                     # Expo configuration
-├── package.json                 # Frontend dependencies
-├── tsconfig.json                # TypeScript configuration
-├── eslint.config.js             # ESLint configuration
-└── README.md                    # Project overview
+├── .gitignore
+├── README.md                        # Entry point documentation
+├── aws_resources/                   # Backend Infrastructure & Logic
+│   ├── app.py                       # AWS CDK App Entry Point (Python)
+│   ├── cdk.json                     # CDK Context & Config
+│   ├── requirements.txt             # Python Dependencies (CDK)
+│   ├── source.bat                   # Environment setup script
+│   ├── backend/                     # Business Logic (Lambda Functions)
+│   │   ├── build.gradle.kts         # Kotlin Build Configuration
+│   │   ├── settings.gradle.kts
+│   │   └── src/main/kotlin/
+│   │       └── com/handler/
+│   │           └── Handler.kt       # Lambda Handler Entry Point
+│   ├── cdk/                         # Infrastructure Definitions
+│   │   └── cdk_stack.py             # Main CloudFormation Stack Definition
+│   ├── schema_initializer/          # Database Migration/Setup
+│   │   ├── handler.py
+│   │   └── verify_db_init.py
+│   └── tests/                       # Infrastructure Tests
+│       └── unit/
+│           └── test_cdk_stack.py
+├── docs/                            # Project Documentation
+│   ├── BackendSetup.md
+│   ├── FrontendSetup.md
+│   ├── Design_Document.pdf
+│   └── DEV_PROCESS.md
+└── frontend/                        # Mobile Application (React Native/Expo)
+    ├── app.json                     # Expo Configuration
+    ├── package.json                 # JS Dependencies
+    ├── tsconfig.json                # TypeScript Configuration
+    ├── app/                         # Application Screens & Routing
+    │   ├── _layout.tsx              # Root Layout & Navigation Wrapper
+    │   ├── index.tsx                # Home/Landing Screen
+    │   ├── login.tsx                # Authentication Screen
+    │   └── firebase.ts              # Firebase Configuration
+    ├── assets/                      # Static Assets (Images/Fonts)
+    │   └── images/
+    └── .vscode/                     # Editor Settings
 
 ```
 
-___
+### Standards & Documentation References
 
-## Branching Strategy
+#### Frontend
 
-This project uses a **Feature Branch Workflow** with a single main integration branch. All feature development occurs in dedicated branches that are linked to GitHub project issues.
+Our frontend is built using React Native with Expo. We follow the file structure detailed by Expo Router for organizing screens and navigation. For more information, refer to the [Expo Router Documentation](https://docs.expo.dev/router/introduction/).
 
-### Main Branches
+#### Backend
 
-#### `main`
-- **Purpose**: Production-ready code and stable releases
-- **Protection**: Protected branch requiring PR approval and CI/CD checks
-- **Merge Policy**: Only via Pull Requests that pass all checks
-- **Deployment**: Automatically deployed to production/staging environments
+The backend infrastructure is created using AWS CDK in Python with the core backend lambda handler created in Kotlin to achieve better runtime performance.
+We follow the best practices for AWS CDK projects as outlined in their [documentation](https://docs.aws.amazon.com/cdk/v2/guide/best-practices.html)
 
-### Branch Naming Convention
+## Workflow and Branching Strategy
 
-All feature branches must follow this naming pattern:
+This project uses a **Feature Branch Workflow** with a single main integration branch. All development occurs in dedicated branches that are linked to GitHub project issues.
 
-```
-issue-[issue-number]-[short-description]
-```
-
-**Examples:**
-- `issue-123-add-image-upload`
-- `issue-456-implement-api-authentication`
-- `issue-89-fix-camera-permissions`
-
-
-### Workflow Process
+### Workflow
 
 1. **Issue Creation**
-   - Create a GitHub issue describing the feature or bug fix
-   - Assign issue to appropriate team member
-   - Label appropriately (feature, bug, enhancement, etc.)
+   - See [Creating an Issue](#creating-an-issue) for detailed instructions
 
 2. **Branch Creation**
-   - Create a feature branch from `main`: `git checkout -b feature/[issue-number]-[description]`
-   - Link branch to GitHub issue in PR description using: `Closes #123` or `Fixes #123`
+   - See [Creating a New Feature Branch](#creating-a-new-feature-branch) for detailed instructions
 
 3. **Development**
    - Make commits with clear, descriptive messages
    - Push branch to remote repository
-   - **CI/CD Pipeline**: On push, the pipeline automatically:
-     * Builds Kotlin backend and runs unit tests
-     * Deploys branch-specific CloudFormation stack (e.g., `StrideStack-123-feature-name`)
-     * Runs integration tests against the deployed stack
+
+   ```
+   git push origin <branch-name>
+   ```
+
    - Keep branch up-to-date with `main` by rebasing or merging
 
 4. **Pull Request**
-   - Create Pull Request targeting `main`
+   - Create Pull Request targeting `main` on GitHub
    - Reference the GitHub issue in PR title/description
    - Assign a reviewer (required)
    - **CI/CD Pipeline**: When PR is opened/updated, the pipeline automatically:
@@ -125,35 +131,237 @@ issue-[issue-number]-[short-description]
      * Runs integration tests against the production stack
    - Delete feature branch after merge
 
+---
 
+### Branches
 
+#### Main
+
+- **Purpose**: Production-ready code and stable releases
+- **Protection**: Protected branch requiring PR approval and CI/CD checks
+- **Merge Policy**: Only via Pull Requests that pass all checks
+- **Deployment**: Automatically deployed to main stack
+
+#### Feature Branches
+
+- **Purpose**: Implementing changes for an issue, doing work
+- **Protection**: None
+- **Merge Policy**: At discretion of branch owner
+- **Deployment**: Automatically deployed to branch specific dev stack `StrideStack-<issue-number>-<description>`
+
+All feature branches must follow this naming pattern:
+
+```
+<tag>/<issue-number>-<short-description>
+```
+See [Tags](#tags) for details
+
+**Examples:**
+
+- `feature/123-add-image-upload`
+- `bug/456-fix-camera-permissions`
+- `fix/789-security-patch`
+
+---
+
+### Creating an Issue
+
+When creating a new GitHub issue, follow these guidelines:
+
+**Issue Naming Convention:**
+
+- Format: `<tag>: <description>`
+- Use the appropriate tag prefix (see [Tags](#tags) section)
+- Keep the description concise and descriptive
+
+**Steps:**
+
+1. Go to the repository's Issues tab
+2. Click **New Issue**
+3. Enter the issue title using the naming convention: `<tag>: <description>`
+4. Add a clear and detailed description of the issue or feature request
+5. Assign the issue to the appropriate team member
+6. Add appropriate labels and tags (see [Tags](#tags) section)
+
+**Note:** The tag you use in the issue title should match the tag you use when creating the corresponding branch (e.g., if the issue is titled `feature: add image upload`, create a branch with `feature/` prefix).
+
+---
+
+### Creating a New Feature Branch
+
+Follow these steps to create a new feature branch:
+
+1. **Ensure you're on `main` and up-to-date**
+
+   ```bash
+   git checkout main
+   git pull origin main
+   ```
+
+2. **Create a new branch with the appropriate tag**
+
+   ```bash
+   git checkout -b <tag>/<issue-number>-<short-description>
+   ```
+
+   **Example:**
+
+   ```bash
+   git checkout -b feature/123-add-image-upload
+   ```
+
+3. **Push the branch to remote**
+
+   ```bash
+   git push -u origin <tag>/<issue-number>-<short-description>
+   ```
+
+   **Example:**
+
+   ```bash
+   git push -u origin feature/123-add-image-upload
+   ```
+
+4. **Verify branch naming**
+   - Branch name should follow the pattern: `<tag>/<issue-number>-<short-description>`
+   - Use lowercase and hyphens (no spaces or underscores)
+   - Keep description concise (20 characters or less)
+   - Issue number should match the GitHub issue you're working on
+
+**Notes:**
+
+- Always create branches from `main` to ensure you have the latest code
+- Use the `-u` flag when pushing to set up tracking between local and remote branches
+- The branch will automatically trigger CI/CD workflows and deploy to a branch-specific stack
+
+---
+
+### Tags
+
+Tags are used to categorize issues and branches. Select the appropriate tag based on the type of work:
+
+- **`feature`** - For new features, enhancements, and functionality additions
+  - Use for: Adding new user-facing features, implementing new capabilities, major enhancements
+
+- **`bug`** - For bug fixes and defect corrections
+  - Use for: Fixing defects in existing features, correcting incorrect behavior
+
+- **`fix`** - For quick fixes, hotfixes, and urgent corrections
+  - Use for: Critical production issues, quick fixes
+
+- **`app`** - For frontend application changes
+  - Use for: React Native/Expo frontend modifications, UI/UX changes, mobile app features
+
+- **`infra`** - For infrastructure and DevOps changes
+  - Use for: AWS infrastructure updates, CDK changes
+
+- **`ci`** - For CI/CD pipeline and automation changes
+  - Use for: GitHub Actions workflows, CI/CD pipeline improvements, automation updates
 
 ## Code Development & Review Policy
 
-### Pull Request Requirements
+### Policy Summary
 
-All code changes must go through a Pull Request (PR) process before merging into `main`.
+**Pull Requests:**
+
+- Required for all changes to `main` branch
+- Must be linked to a GitHub issue
+- Must receive minimum of 1 approving review
+- Must pass all automated CI checks
+
+**Code Reviews:**
+
+- Frequency: Reviewers check daily for pending PRs
+- Approval: Minimum 1 approving review required
+- Timeline: 24-48 hour response time expected
+
+**CI Checks:**
+
+- Build validation
+- Must pass all unit tests before merge is allowed
+- These checks are automated on every PR open/update
+
+**Merging:**
+
+- Target: All merges go to `main` (single integration branch)
+- Use: Squash & Merge or Rebase & Merge
+- Protection: Direct pushes to `main` are prohibited
+- Post-merge: Automatic deployment to production or branch-specific stack
+
+### Pipeline overview:
+
+1. Pull Request opened
+2. PR Validation runs (Build & Unit Tests)
+3. Code Review process
+4. PR Approved & Merged
+5. Backend Build workflow runs
+6. Infrastructure Deploy workflow runs (Deploy stack & Integration Tests)
+7. Full Deployment completed
+
+---
+
+### Pull Requests
+
+This policy establishes the code review process for our project, aligned with our automated CI/CD pipeline. All code changes must go through a Pull Request (PR) process before merging into `main`.
+
+**Note:** PR validation runs build and tests only. It does not trigger deployment. This provides fast feedback without AWS usage.
 
 #### PR Creation Checklist
 
-- [ ] Branch is named according to convention: `issue-[issue-number]-[description]`
+- [ ] Branch is named according to convention: (see [Workflow and Branching Strategy](#workflow-and-branching-strategy))
 - [ ] Branch is linked to a GitHub issue
 - [ ] Code follows project style guidelines
-- [ ] Tests are added/updated for new functionality
-- [ ] All existing tests pass
+- [ ] Unit tests are added/updated for new functionality
+- [ ] All existing tests pass locally
 - [ ] Documentation is updated if needed
 - [ ] PR description includes:
   - Summary of changes
   - Reference to related issue (`Closes #123`)
   - Testing instructions (if applicable)
   - Screenshots (for UI changes)
+  - Breaking changes (if any)
+
+## Automated Validation
+
+### CI Checks Overview
+
+All PRs must pass automated CI checks before merging. These checks are **mandatory** and therefore can't be bypassed.
+
+**Required Checks:**
+
+1. Build job must succeed
+2. Unit tests job must succeed
+3. No compilation errors
+
+**Check Enforcement:**
+
+- Branch protection rules prevent merging with failed checks
+- Checks must pass on the latest commit
+- Merge button is disabled until all checks pass
+
+### What Gets Checked Automatically
+
+1. **Build Validation**
+   - Kotlin JAR builds successfully
+   - Dependencies resolve correctly
+
+2. **Unit Tests**
+   - All unit tests pass
+
+3. **Workflow Status**
+   - Both build and test jobs must succeed
+   - Results visible in PR checks
+
+---
 
 ### Code Review Process
+
+The purpose of code review is to ensure that the code base progresses over time without compromising on the code health. All of the tools and processes of code review are designed to this end. (see [The Standard of Code Review](https://google.github.io/eng-practices/review/reviewer/standard.html))
 
 #### Reviewer Assignment
 
 - **Required**: Every PR must have at least one assigned reviewer
-- **Assignment**: 
+- **Assignment**:
   - Automatically assigned based on code ownership (CODEOWNERS file)
   - Manually assigned by PR creator
   - Rotated among team members for fairness
@@ -196,7 +404,6 @@ Reviewers should check for:
 - **Comments**: Use GitHub's review feature for line-by-line feedback
 - **Discussion**: Use PR comments for questions and clarifications
 
-
 #### Code Review Frequency
 
 - **Daily Reviews**: Team members should review PRs daily
@@ -209,8 +416,6 @@ Reviewers should check for:
 - **Clean Up**: Delete merged branches promptly
 - **Naming**: Use descriptive branch names that indicate purpose
 
----
-
 ## Additional Resources
 
 - [GitHub Flow Guide](https://guides.github.com/introduction/flow/)
@@ -221,6 +426,5 @@ Reviewers should check for:
 ---
 
 **Document Version**: 1.0  
-**Last Updated**: 2024  
+**Last Updated**: 2026 \
 **Maintained By**: Stride Development Team
-
