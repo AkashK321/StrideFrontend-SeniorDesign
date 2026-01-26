@@ -116,11 +116,19 @@ This project uses a **Feature Branch Workflow** with a single main integration b
    - Create Pull Request targeting `main` on GitHub
    - Reference the GitHub issue in PR title/description
    - Assign a reviewer (required)
+   - **CI/CD Pipeline**: When PR is opened/updated, the pipeline automatically:
+     * Builds Kotlin backend and runs unit tests
+     * Deploys to the PR's source branch stack (same as push, for validation)
+     * Runs integration tests against the deployed branch stack
    - Wait for CI/CD checks to pass
    - Address review feedback
 
 5. **Merge**
    - After approval and passing CI/CD, merge via "Squash and Merge" or "Rebase and Merge"
+   - **CI/CD Pipeline**: On merge to `main`, the pipeline automatically:
+     * Builds Kotlin backend and runs unit tests
+     * Deploys to production stack (`StrideStack`)
+     * Runs integration tests against the production stack
    - Delete feature branch after merge
 
 ---
