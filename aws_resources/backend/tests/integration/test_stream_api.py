@@ -1,92 +1,68 @@
+import pytest
+from websocket import create_connection
+import json
 import base64
 import os
-import websocket
-import json
-import sys
+from pathlib import Path
 
 # CONFIGURATION
 WS_URL = "wss://yu7vqmtlqb.execute-api.us-east-1.amazonaws.com/prod"
-IMAGE_PATH = "test.jpg"
+SCRIPT_DIR = Path(__file__).parent.absolute()
+# This builds the path: .../backend/tests/integration/test.jpg
+IMAGE_PATH = SCRIPT_DIR / "test.jpg"
 
-# STATE TRACKING
-current_step = 0
-failed_tests = 0
-
-def on_message(ws, message):
-    global current_step, failed_tests
-    current_step += 1
+def test_dataflow():
+    """
+    Integration test that validates:
+    1. Invalid payloads are rejected.
+    2. Valid JPEG payloads are accepted.
+    """
     
-    print(f"\n📩 RESPONSE #{current_step} RECEIVED: {message}")
-
-    # --- ASSERTION LOGIC ---
-    if current_step == 1:
-        # TEST CASE 1: Expect Failure (Bad Data)
-        if "false" in message:
-            print("✅ TEST 1 PASSED: API correctly identified bad data.")
-        else:
-            print("❌ TEST 1 FAILED: API accepted bad data!")
-            failed_tests += 1
-
-    elif current_step == 2:
-        # TEST CASE 2: Expect Success (Real JPEG)
-        if "true" in message:
-            print("✅ TEST 2 PASSED: API correctly identified real JPEG.")
-        else:
-            print("❌ TEST 2 FAILED: API rejected valid JPEG!")
-            failed_tests += 1
+    # 1. CONNECT (Synchronous)
+    print(f"\n🔌 Connecting to {WS_URL}...")
+    ws = create_connection(WS_URL)
+    
+    try:
+        # --- TEST CASE 1: SEND GARBAGE DATA ---
+        print("🚀 [Step 1] Sending Invalid Data...")
+        payload_fake = {
+            "action": "frame",
+            "body": "simulated_base64_image_data_xyz_INVALID"
+        }
+        ws.send(json.dumps(payload_fake))
         
-        # End of tests
+        # Wait for response (Blocking)
+        response_1 = ws.recv()
+        print(f"📩 Received: {response_1}")
+        
+        # Assertions
+        assert "false" in response_1.lower() or "error" in response_1.lower(), \
+            f"Expected error response for bad data, got: {response_1}"
+
+
+        # --- TEST CASE 2: SEND REAL JPEG ---
+        print("🚀 [Step 2] Sending Valid JPEG...")
+        if not os.path.exists(IMAGE_PATH):
+            pytest.fail(f"Test image not found at {IMAGE_PATH}")
+
+        with open(IMAGE_PATH, "rb") as image_file:
+            base64_string = base64.b64encode(image_file.read()).decode('utf-8')
+
+        payload_real = {
+            "action": "frame",
+            "body": base64_string
+        }
+        ws.send(json.dumps(payload_real))
+        
+        # Wait for response (Blocking)
+        response_2 = ws.recv()
+        print(f"📩 Received: {response_2}")
+
+        # Assertions
+        assert "true" in response_2.lower() or "valid" in response_2.lower(), \
+            f"Expected success for valid JPEG, got: {response_2}"
+
+    finally:
+        # Always close connection, even if test fails
         ws.close()
-
-def on_error(ws, error):
-    print(f"❌ CONNECTION ERROR: {error}")
-    sys.exit(1)
-
-def on_close(ws, close_status_code, close_msg):
-    print("\n-----------------------------------")
-    if failed_tests == 0 and current_step == 2:
-        print("🎉 ALL INTEGRATION TESTS PASSED")
-        sys.exit(0) # Success Exit Code
-    else:
-        print(f"💀 TESTS FAILED. Failures: {failed_tests}")
-        sys.exit(1) # Failure Exit Code
-
-def on_open(ws):
-    print("-----------------------------------")
-    print("🚀 STARTING INTEGRATION TESTS")
-    print("-----------------------------------")
-    
-    # --- TEST 1: SEND GARBAGE DATA ---
-    print("\n[Step 1] Sending Invalid Data...")
-    payload_fake = {
-        "action": "frame",
-        "body": "simulated_base64_image_data_xyz_INVALID"
-    }
-    ws.send(json.dumps(payload_fake))
-
-    # --- TEST 2: SEND REAL JPEG ---
-    print("[Step 2] Sending Valid JPEG...")
-    if not os.path.exists(IMAGE_PATH):
-        print(f"❌ FATAL: Could not find {IMAGE_PATH}")
-        ws.close()
-        sys.exit(1)
-    
-    with open(IMAGE_PATH, "rb") as image_file:
-        binary_data = image_file.read()
-        base64_string = base64.b64encode(binary_data).decode('utf-8')
-    
-    payload_real = {
-        "action": "frame",
-        "body": base64_string
-    }
-    ws.send(json.dumps(payload_real))
-
-if __name__ == "__main__":
-    # websocket.enableTrace(True) 
-    
-    ws = websocket.WebSocketApp(WS_URL,
-                                on_open=on_open,
-                                on_message=on_message,
-                                on_error=on_error,
-                                on_close=on_close)
-    ws.run_forever()
+        print("🔌 Connection Closed")
