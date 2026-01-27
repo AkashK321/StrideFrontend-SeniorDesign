@@ -9,6 +9,8 @@ from aws_cdk import (
     CfnOutput,
     aws_lambda as _lambda,
     aws_apigateway as apigw,
+    aws_apigatewayv2 as apigw_v2,
+    aws_apigatewayv2_integrations as integrations,
     aws_ec2 as ec2,
     aws_rds as rds,
     RemovalPolicy,
@@ -83,31 +85,70 @@ class CdkStack(Stack):
                 )
             )
 
-        # Define the Backend Lambda function
-        backend_handler = _lambda.Function(
-            self, "BackendHandler",
+        # Define the Authentication Lambda function
+        auth_handler = _lambda.Function(
+            self, "AuthHandler",
             runtime=_lambda.Runtime.JAVA_21,
-            handler="com.handler.Handler", 
+            handler="com.handlers.AuthHandler", 
             code=code_asset,  # Uses either the local JAR or the Docker builder
             memory_size=1024, 
             timeout=Duration.seconds(15),
             snap_start=_lambda.SnapStartConf.ON_PUBLISHED_VERSIONS,
         )
 
+        # Define the Object Detection Lambda function
+        object_detection_handler = _lambda.Function(
+            self, "ObjectDetectionHandler",
+            runtime=_lambda.Runtime.JAVA_21,
+            handler="com.handlers.ObjectDetectionHandler",
+            code=code_asset,  # Uses either the local JAR or the Docker builder
+            memory_size=3008,
+            timeout=Duration.seconds(30),
+            snap_start=_lambda.SnapStartConf.ON_PUBLISHED_VERSIONS,
+        )
+
+
         # Define the API Gateway REST API
         api = apigw.LambdaRestApi(
-            self, "APIEndpoint",
-            handler=backend_handler,
+            self, "BusinessApi",
+            handler=auth_handler,
             proxy=False 
         )
 
         items = api.root.add_resource("items")
         items.add_method("GET")
 
+        # Define the API Gateway WebSocket API
+        ws_api = apigw_v2.WebSocketApi(self, "StreamAPI")
+        # Create a Stage (required for WebSockets)
+        apigw_v2.WebSocketStage(self, "ProdStage",
+            web_socket_api=ws_api,
+            stage_name="prod",
+            auto_deploy=True
+        )
+        # Add Routes
+        # $connect and $disconnect are special AWS routes
+        # TODO: uncomment below route definition with auth is ready
+        # ws_api.add_route(
+        #     route_key="$connect", 
+        #     integration=integrations.WebSocketLambdaIntegration("ConnectIntegration", auth_handler)
+        # )
+        # "frame" is the custom route for sending video frames
+        ws_api.add_route(
+            route_key="frame", 
+            integration=integrations.WebSocketLambdaIntegration("FrameIntegration", object_detection_handler)
+        )
+        ws_api.grant_manage_connections(object_detection_handler)
+
         # Add stack outputs for reporting to CICD
         CfnOutput(self, "APIEndpointURL",
             value=api.url,
             description="API Gateway endpoint URL"
+        )
+
+        CfnOutput(self, "WebSocketURL",
+            value=ws_api.api_endpoint,
+            description="The WSS URL for Object Detection"
         )
 
         CfnOutput(self, "StackName",
