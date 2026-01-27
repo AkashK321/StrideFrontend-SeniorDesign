@@ -1,3 +1,17 @@
+/**
+ * Button component - reusable primary button for user actions.
+ *
+ * A standardized button component that provides consistent styling and behavior
+ * across the app. Features a blue background, white text, and rounded corners by default,
+ * with support for custom styling via props.
+ *
+ * Uses React.createElement (non-JSX) to match the project's TypeScript configuration.
+ *
+ * @param onPress - Callback function executed when the button is pressed
+ * @param title - Text displayed inside the button
+ * @param style - Optional custom styles for the button container (merged with defaults)
+ * @param textStyle - Optional custom styles for the button text (merged with defaults)
+ */
 import * as React from "react";
 import { Pressable, Text, ViewStyle, TextStyle } from "react-native";
 

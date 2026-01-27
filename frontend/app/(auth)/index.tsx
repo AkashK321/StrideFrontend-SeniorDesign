@@ -1,3 +1,13 @@
+/**
+ * Landing screen - the first screen users see when opening the app.
+ *
+ * This is the root route ("/") for unauthenticated users. It displays a welcome message
+ * and provides a "Sign in" button that navigates to the main tabbed app experience.
+ *
+ * Located in the (auth) route group, this screen serves as the entry point before users
+ * authenticate. Future authentication flows (login, forgot password, etc.) will be added
+ * alongside this screen in the (auth) directory.
+ */
 import * as React from "react";
 import { View, Text } from "react-native";
 import { useRouter } from "expo-router";
