@@ -151,6 +151,7 @@ class CdkStack(Stack):
         )
 
         # 3. Model Definitions (The Recipe + Hardware)
+        # Using ml.m5.large real-time endpoints for benchmarking
         models_to_benchmark = [
             {"name": "yolov11-nano", "instance": "ml.m5.large"},
             {"name": "yolo-nas", "instance": "ml.m5.large"},
@@ -213,7 +214,7 @@ class CdkStack(Stack):
             # Grant SageMaker role access to read the model artifact
             model_asset.grant_read(sagemaker_role)
 
-            # Define the Endpoint Config
+            # Define the Endpoint Config with real-time instances
             sm_config = sagemaker.CfnEndpointConfig(
                 self, f"Config-{m_name}",
                 production_variants=[

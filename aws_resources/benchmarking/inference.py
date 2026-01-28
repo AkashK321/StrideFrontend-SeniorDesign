@@ -39,25 +39,47 @@ def input_fn(request_body, request_content_type):
     raise ValueError(f"Unsupported content type: {request_content_type}")
 
 def predict_fn(input_data, model):
-    if hasattr(model, 'predict'):
-        return model.predict(input_data)
+    """
+    Run inference. Both Ultralytics and SuperGradients use similar patterns.
+    """
+    import time
+    start = time.time()
+    
+    # Check if it's a SuperGradients model (YOLO-NAS)
+    if hasattr(model, 'predict') and 'super_gradients' in str(type(model)):
+        result = model.predict(input_data)
+        inference_time = (time.time() - start) * 1000
+        return {"result": result, "inference_ms": inference_time, "model_type": "yolo-nas"}
     else:
-        return model(input_data)
+        # Ultralytics YOLO
+        result = model(input_data)
+        inference_time = (time.time() - start) * 1000
+        return {"result": result, "inference_ms": inference_time, "model_type": "ultralytics"}
 
 def output_fn(prediction, content_type):
-    if isinstance(prediction, list):
-        result = prediction[0]
+    """
+    Extract metrics from model output. Handles both Ultralytics and SuperGradients formats.
+    """
+    model_type = prediction.get("model_type", "ultralytics")
+    result = prediction["result"]
+    inference_ms = prediction.get("inference_ms", 0)
+    
+    # Ultralytics YOLO (v11 Nano and v11 Small/Realtime)
+    if model_type == "ultralytics":
+        res = result[0]  # Ultralytics returns a list
         output = {
-            "model_latency_ms": result.speed.get('inference', 0),
-            "detections_count": len(result.boxes),
-            "max_confidence": float(result.boxes.conf.max()) if len(result.boxes) > 0 else 0.0,
+            "model_latency_ms": res.speed.get('inference', inference_ms),
+            "detections_count": len(res.boxes),
+            "max_confidence": float(res.boxes.conf.max().item()) if len(res.boxes) > 0 else 0.0,
         }
+    # SuperGradients YOLO-NAS
     else:
-        result = prediction.prediction
+        # YOLO-NAS returns ImagesPredictions, access first image's prediction
+        pred = result[0].prediction if hasattr(result, '__getitem__') else result.prediction
         output = {
-            "model_latency_ms": 0,
-            "detections_count": len(result.bboxes_scores),
-            "max_confidence": float(result.bboxes_scores.max()) if len(result.bboxes_scores) > 0 else 0.0,
+            "model_latency_ms": inference_ms,
+            "detections_count": len(pred.confidence) if hasattr(pred, 'confidence') else 0,
+            "max_confidence": float(pred.confidence.max()) if hasattr(pred, 'confidence') and len(pred.confidence) > 0 else 0.0,
         }
     
     return json.dumps(output)
