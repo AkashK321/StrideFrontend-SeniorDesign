@@ -5,11 +5,18 @@ import base64
 import os
 from pathlib import Path
 
-# CONFIGURATION
-WS_URL = "wss://yu7vqmtlqb.execute-api.us-east-1.amazonaws.com/prod"
 SCRIPT_DIR = Path(__file__).parent.absolute()
 # This builds the path: .../backend/tests/integration/test.jpg
 IMAGE_PATH = SCRIPT_DIR / "test.jpg"
+
+@pytest.fixture
+def api_base_url():
+    """Get the API base URL from environment variable."""
+    url = os.getenv("WS_API_URL")
+    if not url:
+        pytest.skip("WS_API_URL environment variable not set")
+    # Remove trailing slash if present
+    return url.rstrip("/")
 
 def test_dataflow():
     """
@@ -19,8 +26,8 @@ def test_dataflow():
     """
     
     # 1. CONNECT (Synchronous)
-    print(f"\n🔌 Connecting to {WS_URL}...")
-    ws = create_connection(WS_URL)
+    print(f"\n🔌 Connecting to {api_base_url}...")
+    ws = create_connection(api_base_url)
     
     try:
         # --- TEST CASE 1: SEND GARBAGE DATA ---

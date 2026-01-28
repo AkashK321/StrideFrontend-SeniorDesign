@@ -141,7 +141,7 @@ class CdkStack(Stack):
         ws_api.grant_manage_connections(object_detection_handler)
 
         # Add stack outputs for reporting to CICD
-        CfnOutput(self, "APIEndpointURL",
+        CfnOutput(self, "RestAPIEndpointURL",
             value=api.url,
             description="API Gateway endpoint URL"
         )
@@ -156,6 +156,7 @@ class CdkStack(Stack):
             description="Stack name used for this deployment"
         )
 
+        # TODO: RDS setup disabled for now - to be re-enabled when ready
         # Define RDS Resource
         # db_instance = rds.DatabaseInstance(
         #     self, "StrideDB",
