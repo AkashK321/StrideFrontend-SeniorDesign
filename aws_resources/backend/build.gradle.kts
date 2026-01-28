@@ -20,6 +20,9 @@ repositories {
 dependencies {
     implementation("com.amazonaws:aws-lambda-java-core:1.2.3")
     implementation("com.amazonaws:aws-lambda-java-events:3.11.4")
+    implementation("software.amazon.awssdk:apigatewaymanagementapi:2.21.0")
+    implementation("software.amazon.awssdk:url-connection-client:2.21.0")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.14.2")
     implementation(kotlin("stdlib"))
 
     // Test dependencies

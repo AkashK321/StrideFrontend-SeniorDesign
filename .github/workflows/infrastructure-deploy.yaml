@@ -94,6 +94,7 @@ jobs:
     
     outputs:
       api_endpoint: ${{ steps.stack-outputs.outputs.api_endpoint }}
+      ws_api_endpoint: ${{ steps.stack-outputs.outputs.ws_api_endpoint }}
     
     steps:
       # Step 1: Checkout the repository code
@@ -221,9 +222,15 @@ jobs:
           fi
 
           # Extract APIEndpointURL from the outputs
-          API_ENDPOINT=$(jq -r ".\"$STACK_KEY\".APIEndpointURL // empty" cdk-outputs.json 2>/dev/null || echo "")
+          API_ENDPOINT=$(jq -r ".\"$STACK_KEY\".RestAPIEndpointURL // empty" cdk-outputs.json 2>/dev/null || echo "")
           if [ -z "$API_ENDPOINT" ] || [ "$API_ENDPOINT" == "null" ]; then
             echo "Warning: Could not extract APIEndpointURL from cdk-outputs.json"
+          fi
+
+          # Extract WebSocket from the outputs
+          WS_API_ENDPOINT=$(jq -r ".\"$STACK_KEY\".WebSocketURL // empty" cdk-outputs.json 2>/dev/null || echo "")
+          if [ -z "$API_ENDPOINT" ] || [ "$API_ENDPOINT" == "null" ]; then
+            echo "Warning: Could not extract WebSocketURL from cdk-outputs.json"
           fi
 
           echo "stack_name=$STACK_NAME" >> $GITHUB_OUTPUT
@@ -233,7 +240,12 @@ jobs:
           # Set outputs for use in subsequent steps or workflow outputs
           if [ -n "$API_ENDPOINT" ]; then
             echo "api_endpoint=$API_ENDPOINT" >> $GITHUB_OUTPUT
-            echo "✅ API Endpoint: $API_ENDPOINT"
+            echo "✅ REST API Endpoint: $API_ENDPOINT"
+          fi
+
+          if [ -n "$WS_API_ENDPOINT" ]; then
+            echo "ws_api_endpoint=$WS_API_ENDPOINT" >> $GITHUB_OUTPUT
+            echo "✅ WebSocket API Endpoint: $WS_API_ENDPOINT"
           fi
           
           # Create job summary with formatted markdown (shows up in Actions UI summary tab)
@@ -252,6 +264,11 @@ jobs:
               echo "#### 🌐 API Gateway Endpoint"
               echo "- **URL**: [${API_ENDPOINT}](${API_ENDPOINT})"
               echo "- **Test**: \`curl ${API_ENDPOINT}/items\`"
+            fi
+            if [ -n "$WS_API_ENDPOINT" ]; then
+              echo ""
+              echo "#### 🌐 WebSocket Endpoint"
+              echo "- **URL**: \`${WS_API_ENDPOINT}\`"
             fi
             echo ""
             echo "<details>"
@@ -275,4 +292,5 @@ jobs:
     uses: ./.github/workflows/integration-tests.yaml
     with:
       api_endpoint: ${{ needs.deploy.outputs.api_endpoint }}
+      ws_api_endpoint: ${{ needs.deploy.outputs.ws_api_endpoint }}
     secrets: inherit
