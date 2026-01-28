@@ -7,11 +7,11 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
-def benchmark_endpoint(endpoint_name, image_path):
+def benchmark_endpoint(endpoint_name, image_path, region='us-east-1'):
     """
     Sends a single image to a specific SageMaker endpoint and records latency.
     """
-    runtime = boto3.client('sagemaker-runtime')
+    runtime = boto3.client('sagemaker-runtime', region_name=region)
     
     with open(image_path, 'rb') as f:
         image_bytes = f.read()
@@ -43,7 +43,7 @@ def benchmark_endpoint(endpoint_name, image_path):
             "Status": f"Error: {str(e)}"
         }
 
-def run_benchmarks(endpoints, image_folder, interval=0.5):
+def run_benchmarks(endpoints, image_folder, interval=0.5, region='us-east-1'):
     """
     Main loop: Sends images to all endpoints every X seconds.
     """
@@ -57,6 +57,7 @@ def run_benchmarks(endpoints, image_folder, interval=0.5):
     results = []
     print(f"🚀 Starting benchmark on {len(endpoints)} endpoints...")
     print(f"📸 Using {len(images)} images with a {interval}s interval.")
+    print(f"🌎 Region: {region}")
 
     try:
         for i, img in enumerate(images):
@@ -64,7 +65,7 @@ def run_benchmarks(endpoints, image_folder, interval=0.5):
             
             # Use ThreadPoolExecutor to call all endpoints in PARALLEL
             with ThreadPoolExecutor(max_workers=len(endpoints)) as executor:
-                futures = [executor.submit(benchmark_endpoint, ep, img) for ep in endpoints]
+                futures = [executor.submit(benchmark_endpoint, ep, img, region) for ep in endpoints]
                 
                 for future in futures:
                     res = future.result()
@@ -157,6 +158,7 @@ if __name__ == "__main__":
     parser.add_argument("--endpoints", nargs="+", required=True, help="List of SageMaker endpoints to test")
     parser.add_argument("--folder", default="test_images", help="Folder containing test images")
     parser.add_argument("--interval", type=float, default=0.5, help="Interval between frames in seconds")
+    parser.add_argument("--region", default="us-east-1", help="AWS region (default: us-east-1)")
     
     args = parser.parse_args()
-    run_benchmarks(args.endpoints, args.folder, args.interval)
+    run_benchmarks(args.endpoints, args.folder, args.interval, args.region)
