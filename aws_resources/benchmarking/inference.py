@@ -36,26 +36,23 @@ def model_fn(model_dir):
                 raise FileNotFoundError(f"Weights not found at {model_path}")
             return YOLO(model_path)
         
-        # 2. YOLO-NAS Small - load from pre-bundled weights or download to /tmp
+        # 2. YOLO-NAS Small - use Ultralytics NAS (simpler than SuperGradients)
         elif model_type == "yolo-nas":
-            # Set all SuperGradients cache directories to writable /tmp
-            os.environ["SG_CHECKPOINTS_DIR"] = "/tmp/sg_checkpoints"
+            from ultralytics import NAS
+            
+            # Set cache to writable /tmp for any downloads
             os.environ["TORCH_HOME"] = "/tmp/torch_home"
-            os.makedirs("/tmp/sg_checkpoints", exist_ok=True)
             os.makedirs("/tmp/torch_home", exist_ok=True)
             
-            from super_gradients.training import models
+            model_path = os.path.join(model_dir, "yolo_nas_s.pt")
             
-            local_weights = os.path.join(model_dir, "yolo_nas_s_coco.pth")
-            
-            if os.path.exists(local_weights):
-                # Use pre-bundled weights (preferred)
-                logger.info(f"Loading YOLO-NAS from pre-bundled weights: {local_weights}")
-                model = models.get("yolo_nas_s", num_classes=80, checkpoint_path=local_weights)
+            if os.path.exists(model_path):
+                logger.info(f"Loading YOLO-NAS from pre-bundled weights: {model_path}")
+                model = NAS(model_path)
             else:
-                # Fallback: download to /tmp (if pre-bundling failed during CDK deploy)
-                logger.warning(f"Pre-bundled weights not found, downloading to /tmp...")
-                model = models.get("yolo_nas_s", pretrained_weights="coco")
+                # Fallback: use Ultralytics auto-download to /tmp
+                logger.warning(f"Pre-bundled weights not found, using Ultralytics auto-download...")
+                model = NAS("yolo_nas_s.pt")
             
             logger.info("YOLO-NAS loaded successfully")
             return model
@@ -87,46 +84,29 @@ def input_fn(request_body, request_content_type):
 
 def predict_fn(input_data, model):
     """
-    Run inference. Both Ultralytics and SuperGradients use similar patterns.
+    Run inference. All models now use Ultralytics API (YOLO, NAS).
     """
     import time
     start = time.time()
     
-    # Check if it's a SuperGradients model (YOLO-NAS)
-    if hasattr(model, 'predict') and 'super_gradients' in str(type(model)):
-        result = model.predict(input_data)
-        inference_time = (time.time() - start) * 1000
-        return {"result": result, "inference_ms": inference_time, "model_type": "yolo-nas"}
-    else:
-        # Ultralytics YOLO
-        result = model(input_data)
-        inference_time = (time.time() - start) * 1000
-        return {"result": result, "inference_ms": inference_time, "model_type": "ultralytics"}
+    # All Ultralytics models (YOLO v11, NAS) use the same API
+    result = model(input_data)
+    inference_time = (time.time() - start) * 1000
+    return {"result": result, "inference_ms": inference_time}
 
 def output_fn(prediction, content_type):
     """
-    Extract metrics from model output. Handles both Ultralytics and SuperGradients formats.
+    Extract metrics from Ultralytics model output.
+    Works for YOLO v11 and YOLO-NAS (both use same result format).
     """
-    model_type = prediction.get("model_type", "ultralytics")
     result = prediction["result"]
     inference_ms = prediction.get("inference_ms", 0)
     
-    # Ultralytics YOLO (v11 Nano and v11 Small/Realtime)
-    if model_type == "ultralytics":
-        res = result[0]  # Ultralytics returns a list
-        output = {
-            "model_latency_ms": res.speed.get('inference', inference_ms),
-            "detections_count": len(res.boxes),
-            "max_confidence": float(res.boxes.conf.max().item()) if len(res.boxes) > 0 else 0.0,
-        }
-    # SuperGradients YOLO-NAS
-    else:
-        # YOLO-NAS returns ImagesPredictions, access first image's prediction
-        pred = result[0].prediction if hasattr(result, '__getitem__') else result.prediction
-        output = {
-            "model_latency_ms": inference_ms,
-            "detections_count": len(pred.confidence) if hasattr(pred, 'confidence') else 0,
-            "max_confidence": float(pred.confidence.max()) if hasattr(pred, 'confidence') and len(pred.confidence) > 0 else 0.0,
-        }
+    res = result[0]  # Ultralytics returns a list
+    output = {
+        "model_latency_ms": res.speed.get('inference', inference_ms),
+        "detections_count": len(res.boxes),
+        "max_confidence": float(res.boxes.conf.max().item()) if len(res.boxes) > 0 else 0.0,
+    }
     
     return json.dumps(output)

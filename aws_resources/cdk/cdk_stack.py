@@ -153,9 +153,10 @@ class CdkStack(Stack):
         # 3. Model Definitions (The Recipe + Hardware)
         # Using ml.m5.large real-time endpoints for benchmarking
         # Each model includes the weights file to bundle (standard CV deployment pattern)
+        # All models now use Ultralytics for consistent API and reliable downloads
         models_to_benchmark = [
             {"name": "yolov11-nano", "instance": "ml.m5.large", "weights_url": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n.pt", "weights_file": "yolo11n.pt"},
-            {"name": "yolo-nas", "instance": "ml.m5.large", "weights_url": "https://sghub.deci.ai/models/yolo_nas_s_coco.pth", "weights_file": "yolo_nas_s_coco.pth"},
+            {"name": "yolo-nas", "instance": "ml.m5.large", "weights_url": "https://github.com/ultralytics/assets/releases/download/v8.1.0/yolo_nas_s.pt", "weights_file": "yolo_nas_s.pt"},
             {"name": "yolo-realtime", "instance": "ml.m5.large", "weights_url": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11s.pt", "weights_file": "yolo11s.pt"},
         ]
 
