@@ -3,29 +3,27 @@
 # ============================================================================
 #
 # PURPOSE:
-#   Destroys branch-specific CloudFormation stacks and cleans up
-#   associated AWS resources (S3 artifacts, Lambda versions, etc.)
-#   when a branch is deleted or merged into main.
+#   Destroys branch-specific CloudFormation stacks when a PR is merged.
+#   This cleans up AWS resources (Lambda functions, API Gateway, etc.)
+#   associated with feature branches after they've been merged into main.
 #
 # TRIGGERS:
-#   1. Branch deletion event (delete):
-#      - Automatically triggered when a branch is deleted
-#      - Extracts branch name from event context
-#   2. Pull request closed (pull_request: closed):
-#      - Triggered when PR is merged or closed
-#      - Only on main branch (to cleanup merged feature branches)
-#   3. Manual trigger (workflow_dispatch):
+#   1. Pull request closed and merged (pull_request: closed + merged):
+#      - Automatically triggered when a PR is merged
+#      - Extracts branch name from PR head ref
+#      - Only destroys branch-specific stacks (not production StrideStack)
+#   2. Manual trigger (workflow_dispatch):
 #      - Can be run manually to cleanup any branch
-#      - Inputs: branch_name, force (boolean)
+#      - Inputs: branch_name
 #
 # WORKFLOW FLOW:
-#   Branch Deleted OR PR Closed OR Manual Trigger
+#   PR Merged OR Manual Trigger
 #       ↓
 #   cleanup-branch runs
 #       ↓
-#   [Extract/Validate branch name] → [Check if stack exists]
+#   [Extract/Validate branch name] → [Sanitize to stack name]
 #       ↓
-#   [Destroy CDK Stack] → [Cleanup S3 artifacts]
+#   [Check if stack exists] → [Destroy CDK Stack]
 #       ↓
 #   [Verify cleanup] → [Post cleanup status]
 #
@@ -34,30 +32,191 @@
 #
 # OUTPUTS:
 #   - Cleanup status (success/failure)
-#   - Resources destroyed
+#   - Stack name destroyed
 #   - Cleanup timestamp
 #
 # DEPENDENCIES:
 #   - None (independent cleanup workflow)
-#   - Note: Should be idempotent (safe to run multiple times)
+#   - Note: Idempotent (safe to run multiple times, won't fail if stack doesn't exist)
 #
 # ============================================================================
 
 name: Cleanup Branch
 
-# Set branches to none to prevent this workflow from being triggered while its still not implemented
 on:
-  push:
-    branches:
-      - 'NONE'
+  pull_request:
+    types: [closed]
+    paths:
+      - 'aws_resources/**'
+      - '.github/workflows/**'
+  
+  workflow_dispatch:
+    inputs:
+      branch_name:
+        required: true
+        type: string
+        description: 'Branch name to cleanup (e.g., feature/123-add-login)'
+
+# Permissions required for OIDC (OpenID Connect) authentication
+permissions:
+  id-token: write  # Required for OIDC to request JWT token
+  contents: read   # Required to checkout code
 
 jobs:
   cleanup:
-    name: Cleanup
+    name: Cleanup Branch Stack
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    # Only run if PR was merged (not just closed)
+    if: github.event.pull_request.merged == true || github.event_name == 'workflow_dispatch'
     
     steps:
-      # Step 1: Checkout the repository code
-      - name: Checkout code
-        uses: actions/checkout@v4
+      # Step 1: Extract branch name
+      - name: Get branch name
+        id: branch-info
+        run: |
+          # Get branch name from PR event or manual input
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            BRANCH_NAME="${{ inputs.branch_name }}"
+          else
+            BRANCH_NAME="${{ github.event.pull_request.head.ref }}"
+          fi
+          
+          echo "Branch name: $BRANCH_NAME"
+          
+          # Safety check: Prevent destroying production stack
+          BRANCH_LOWER=$(echo "$BRANCH_NAME" | tr '[:upper:]' '[:lower:]')
+          if [ "$BRANCH_LOWER" == "main" ]; then
+            echo "ERROR: Cannot destroy production stack (StrideStack)"
+            echo "This workflow is only for cleaning up feature branch stacks."
+            echo "Production stack should never be destroyed via this workflow."
+            exit 1
+          fi
+          
+          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
       
+      # Step 2: Checkout the branch (needed for CDK to determine stack name from app.py)
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.branch-info.outputs.branch_name || github.event.pull_request.head.ref || inputs.branch_name }}
+      
+      # Step 3: Set up Python
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: aws_resources/requirements.txt
+      
+      # Step 4: Install Python dependencies
+      - name: Install Python dependencies
+        working-directory: aws_resources
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      # Step 5: Set up Node.js for CDK
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      # Step 6: Install CDK
+      - name: Install CDK
+        run: npm install -g aws-cdk
+      
+      # Step 7: Configure AWS credentials
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+      
+      # Step 8: Get stack name from CDK app
+      - name: Get stack name
+        id: stack-name
+        working-directory: aws_resources
+        env:
+          CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
+          CDK_DEFAULT_REGION: us-east-1
+        run: |
+          # Use CDK list to get the stack name (app.py reads branch from git, same as deploy)
+          # This ensures we get the exact same stack name that was used during deployment
+          STACK_NAME=$(cdk list 2>/dev/null | grep -E "^StrideStack" | head -1)
+          
+          if [ -z "$STACK_NAME" ]; then
+            echo "ERROR: Failed to determine stack name from CDK app"
+            echo "This may indicate the branch name doesn't match the expected convention"
+            exit 1
+          fi
+          
+          echo "Stack name: $STACK_NAME"
+          echo "stack_name=$STACK_NAME" >> $GITHUB_OUTPUT
+      
+      # Step 9: Destroy CDK stack
+      - name: Destroy CDK stack
+        working-directory: aws_resources
+        env:
+          CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
+          CDK_DEFAULT_REGION: us-east-1
+        run: |
+          STACK_NAME="${{ steps.stack-name.outputs.stack_name }}"
+          
+          echo "Destroying stack: $STACK_NAME"
+          
+          # Use CDK destroy to remove the stack
+          # CDK will handle the deletion of all resources in the stack
+          if cdk destroy --force --require-approval never "$STACK_NAME"; then
+            echo "Stack destruction completed: $STACK_NAME"
+          else
+            echo "Failed to destroy stack: $STACK_NAME"
+            exit 1
+          fi
+      
+      # Step 10: Create cleanup summary
+      - name: Verify cleanup
+        if: always()
+        run: |
+          STACK_NAME="${{ steps.stack-name.outputs.stack_name }}"
+          BRANCH_NAME="${{ steps.branch-info.outputs.branch_name }}"
+          
+          # Check if stack still exists using CDK list
+          if cdk list --long 2>/dev/null | grep -q "$STACK_NAME"; then
+            STATUS="Stack still exists (deletion may be in progress)"
+            CLEANUP_STATUS="in_progress"
+          else
+            STATUS="Stack successfully destroyed"
+            CLEANUP_STATUS="completed"
+          fi
+          
+          CLEANUP_TIME=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          
+          # Create job summary
+          {
+            echo "## Branch Stack Cleanup"
+            echo ""
+            echo "### Cleanup Information"
+            echo "- **Branch Name**: \`${BRANCH_NAME}\`"
+            echo "- **Stack Name**: \`${STACK_NAME}\`"
+            echo "- **Status**: ${STATUS}"
+            echo "- **Cleaned Up At**: \`${CLEANUP_TIME}\`"
+            echo ""
+            if [ "$CLEANUP_STATUS" == "completed" ]; then
+              echo "**Cleanup completed successfully**"
+            else
+              echo "**Cleanup in progress** (stack deletion may take a few minutes)"
+            fi
+          } >> $GITHUB_STEP_SUMMARY
+          
+          echo "$STATUS"
+          
+          # Exit with error if cleanup failed
+          if [ "$CLEANUP_STATUS" != "completed" ]; then
+            exit 1
+          fi
+        working-directory: aws_resources
+        env:
+          CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
+          CDK_DEFAULT_REGION: us-east-1

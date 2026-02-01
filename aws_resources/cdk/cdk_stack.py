@@ -17,6 +17,7 @@ from aws_cdk import (
     custom_resources as cr,
     BundlingOptions,
     aws_iam as iam,
+    aws_logs as logs,
 )
 from constructs import Construct
 import os
