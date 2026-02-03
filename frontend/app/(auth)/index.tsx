@@ -10,26 +10,33 @@
  */
 import * as React from "react";
 import { View, Text } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import Button from "../../components/Button";
+import { spacing } from "../../theme/spacing";
 
 export default function Landing() {
   const router = useRouter();
 
   return React.createElement(
-    View,
+    SafeAreaView,
     {
       style: {
         flex: 1,
         justifyContent: "center",
         alignItems: "center",
         gap: 16,
+        padding: spacing.lg,
       },
+      edges: ["top", "bottom"],
     },
     React.createElement(Text, null, "Welcome to Stride."),
     React.createElement(Button, {
       onPress: () => router.replace("/home"),
       title: "Sign in",
+      accessibilityLabel: "Sign in to your account",
+      accessibilityRole: "button",
+      accessibilityHint: "Sign in to your account to continue",
     }),
   );
 }

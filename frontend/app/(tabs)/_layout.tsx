@@ -13,13 +13,19 @@ import { Tabs } from "expo-router";
 export default function TabsLayout() {
   return React.createElement(
     Tabs,
-    null,
+    {
+      screenOptions: {
+        headerShown: false,
+      },
+    },
     // Home feed / dashboard tab - main content feed
     React.createElement(Tabs.Screen, { name: "home" }),
     // User profile tab - user's personal profile and information
     React.createElement(Tabs.Screen, { name: "profile" }),
     // App settings and preferences tab - app configuration and preferences
     React.createElement(Tabs.Screen, { name: "settings" }),
+    // UI components tab - used to display all UI components and their usage
+    React.createElement(Tabs.Screen, { name: "ui_components" }),
   );
 }
 
