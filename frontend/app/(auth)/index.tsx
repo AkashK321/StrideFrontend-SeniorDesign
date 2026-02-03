@@ -15,6 +15,8 @@ import { useRouter } from "expo-router";
 import Button from "../../components/Button";
 import TextField from "../../components/TextField";
 import { spacing } from "../../theme/spacing";
+import { typography } from "../../theme/typography";
+import { colors } from "../../theme/colors";
 
 export default function Landing() {
   const router = useRouter();
@@ -26,14 +28,28 @@ export default function Landing() {
     {
       style: {
         flex: 1,
-        justifyContent: "center",
+        justifyContent: "flex-start",
         alignItems: "center",
         gap: 16,
+        paddingTop: 40,
         padding: spacing.lg,
       },
       edges: ["top", "bottom"],
     },
-    React.createElement(Text, null, "Welcome to Stride."),
+    React.createElement(Text, {
+      style: {
+        ...typography.h1,
+        fontSize: 40,
+        marginBottom: spacing.sm,
+      },
+    },
+      "Welcome back to ",
+      React.createElement(Text, {
+        style: {
+          color: colors.primary,
+        },
+      }, "Stride."),
+    ),
     React.createElement(Button, {
       onPress: () => router.replace("/home"),
       title: "Sign in",
@@ -41,14 +57,6 @@ export default function Landing() {
       accessibilityRole: "button",
       accessibilityHint: "Sign in to your account to continue",
     }),
-    React.createElement(TextField, {
-      value: email,
-      onChangeText: setEmail,
-      placeholder: "Email",
-      label: "Email",
-      keyboardType: "email-address",
-      error: emailError,
-    })
   );
 }
 

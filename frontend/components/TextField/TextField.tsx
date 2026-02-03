@@ -11,6 +11,7 @@
  * @param onChangeText - Callback function called when text changes
  * @param placeholder - Placeholder text displayed when input is empty
  * @param label - Optional label text displayed above the input
+ * @param required - Whether the field is required (shows asterisk)
  * @param error - Optional error message displayed below the input
  * @param disabled - Whether the input is disabled (prevents interaction)
  * @param secureTextEntry - Whether to hide text (for passwords)
@@ -26,11 +27,12 @@ import { TextInput, Text, View, ViewStyle, TextStyle } from "react-native";
 import { textFieldStyles } from "./styles";
 import { colors } from "../../theme/colors";
 
-interface TextFieldProps {
+export interface TextFieldProps {
   value: string;
   onChangeText: (text: string) => void;
   placeholder?: string;
   label?: string;
+  required?: boolean;
   error?: string;
   disabled?: boolean;
   secureTextEntry?: boolean;
@@ -47,6 +49,7 @@ export default function TextField({
   onChangeText,
   placeholder,
   label,
+  required = false,
   error,
   disabled = false,
   secureTextEntry = false,
@@ -75,7 +78,28 @@ export default function TextField({
     {
       style: [textFieldStyles.container, style],
     },
-
+    // Label with optional required asterisk
+    label && React.createElement(
+      View,
+      {
+        style: textFieldStyles.labelContainer,
+      },
+      React.createElement(
+        Text,
+        {
+          style: textFieldStyles.label,
+        },
+        label,
+      ),
+      required && React.createElement(
+        Text,
+        {
+          style: textFieldStyles.requiredAsterisk,
+        },
+        "*",
+      ),
+    ),
+    // Input
     React.createElement(
       TextInput,
       {

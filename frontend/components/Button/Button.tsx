@@ -22,7 +22,7 @@ import { Pressable, Text, ViewStyle, TextStyle, ActivityIndicator } from "react-
 import { buttonStyles, ButtonVariant, ButtonSize } from "./styles";
 import { colors } from "../../theme/colors";
 
-interface ButtonProps {
+export interface ButtonProps {
   onPress: () => void;
   title: string;
   variant?: ButtonVariant;

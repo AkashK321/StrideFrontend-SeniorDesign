@@ -21,6 +21,11 @@ export const typography = {
         fontWeight: "700" as const,
         fontFamily: fontFamily.bold,
     },
+    medium: {
+        fontSize: 18,
+        fontWeight: "400" as const,
+        fontFamily: fontFamily.regular,
+    },
     body: { 
         fontSize: 16, 
         fontWeight: "400" as const,
