@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     libgl1-mesa-glx \
     libglib2.0-0 \
+    wget \
     && rm -rf /var/lib/apt/lists/*
 
 # Set Python 3.10 as default
@@ -34,8 +35,11 @@ COPY requirements.txt /opt/program/
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Download YOLOv11-nano model weights (baked into container)
-# This downloads the model during build time, so it's ready at runtime
-RUN python -c "from ultralytics import YOLO; YOLO('yolo11n.pt')"
+# Using wget to download directly from Ultralytics releases
+RUN wget -q https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n.pt -O /opt/program/yolo11n.pt
+
+# Verify model file exists and preload to cache
+RUN python -c "from ultralytics import YOLO; model = YOLO('/opt/program/yolo11n.pt'); print('Model loaded successfully!')"
 
 # Copy inference code
 COPY inference.py /opt/program/

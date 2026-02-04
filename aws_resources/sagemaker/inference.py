@@ -23,8 +23,10 @@ def load_model():
     global model
     try:
         print("Loading YOLOv11-nano model...")
-        model = YOLO('yolo11n.pt')
-        print("Model loaded successfully!")
+        # Model is pre-downloaded to /opt/program/yolo11n.pt during Docker build
+        model_path = '/opt/program/yolo11n.pt'
+        model = YOLO(model_path)
+        print(f"Model loaded successfully from {model_path}!")
         return True
     except Exception as e:
         print(f"Error loading model: {str(e)}")

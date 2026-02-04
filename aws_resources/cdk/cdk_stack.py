@@ -113,18 +113,20 @@ class CdkStack(Stack):
         # SageMaker Resources for YOLOv11
         # ========================================
         
-        # Create ECR Repository for YOLOv11 inference container
-        ecr_repo = ecr.Repository(
+        # ECR Repository for YOLOv11 inference container
+        # The ECR repository is created separately by GitHub Actions workflow (build-sagemaker-image.yaml)
+        # Here we just reference it by name
+        ecr_repo_name = "stride-yolov11-inference"
+        
+        # Reference the ECR repository by name (created by GitHub Actions or manually)
+        # This avoids CloudFormation trying to create/manage the repository
+        ecr_repo = ecr.Repository.from_repository_name(
             self, "YoloV11InferenceRepo",
-            repository_name="stride-yolov11-inference",
-            removal_policy=RemovalPolicy.DESTROY,  # For dev/testing - change to RETAIN for production
-            lifecycle_rules=[
-                ecr.LifecycleRule(
-                    description="Keep last 5 images",
-                    max_image_count=5
-                )
-            ]
+            repository_name=ecr_repo_name
         )
+        
+        # Note: The ECR repository must exist before deploying this stack
+        # Run the "Build and Push SageMaker Docker Image" GitHub Action first
 
         # Create IAM Role for SageMaker Endpoint
         sagemaker_role = iam.Role(
