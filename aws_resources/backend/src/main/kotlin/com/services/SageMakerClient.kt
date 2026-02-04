@@ -8,6 +8,7 @@ import software.amazon.awssdk.core.SdkBytes
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.sagemakerruntime.SageMakerRuntimeClient
 import software.amazon.awssdk.services.sagemakerruntime.model.InvokeEndpointRequest
+import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.fasterxml.jackson.annotation.JsonProperty
@@ -37,6 +38,7 @@ object SageMakerClient {
             client = SageMakerRuntimeClient.builder()
                 .region(Region.of(region))
                 .credentialsProvider(EnvironmentVariableCredentialsProvider.create())
+                .httpClient(UrlConnectionHttpClient.builder().build())
                 .overrideConfiguration { config ->
                     config.apiCallTimeout(Duration.ofSeconds(30))
                     config.apiCallAttemptTimeout(Duration.ofSeconds(30))
