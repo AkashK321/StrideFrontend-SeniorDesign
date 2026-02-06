@@ -16,6 +16,10 @@ import software.amazon.awssdk.services.dynamodb.model.ScanRequest
 import java.net.URI
 import java.util.Base64
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.services.SageMakerClient
+import com.models.InferenceResult
+import com.models.BoundingBox
+import kotlin.collections.emptyList
 
 data class Detection(
     val classId: Int, //COCO class id
@@ -58,9 +62,6 @@ class ObjectDetectionHandler (
         internal val classHeightMap = mutableMapOf<Int, Float>()
         internal var isCacheLoaded = false
     }
-
-    // public get classHeightCache() = classHeightMap
-    // public get isClassHeightCacheLoaded() = isCacheLoaded
     
     private fun loadClassHeightCache(logger: LambdaLogger) {
         if (isCacheLoaded) {
@@ -109,9 +110,36 @@ class ObjectDetectionHandler (
         return detectedObjects
     }
 
-    fun getDetections(imageBytes: ByteArray): List<Detection> {
-        //TODO Implement object detection logic with SageMaker
-        return emptyList()
+    fun getDetections(imageBytes: ByteArray): List<BoundingBox> {
+        // Process with SageMaker if valid image (JPEG or PNG)
+        val inferenceResult: InferenceResult = if (validImage && imageBytes.isNotEmpty()) {
+            try {
+                logger.log("Calling SageMaker endpoint for inference...")
+                val startTime = System.currentTimeMillis()
+                
+                val result = SageMakerClient.invokeEndpoint(imageBytes)
+                
+                val endTime = System.currentTimeMillis()
+                logger.log("SageMaker inference completed in ${endTime - startTime}ms")
+                logger.log("Detections found: ${result.metadata?.detectionCount ?: 0}")
+                
+                result
+            } catch (e: Exception) {
+                logger.log("Error calling SageMaker: ${e.message}")
+                e.printStackTrace()
+                InferenceResult(
+                    status = "error",
+                    error = "Failed to call SageMaker: ${e.message}"
+                )
+            }
+        } else {
+            // Invalid image or no image
+            InferenceResult(
+                status = "error",
+                error = "Invalid image format. Supported formats: JPEG, PNG"
+            )
+        }
+        return inferenceResult.detections ?: emptyList()
     }
 
     override fun handleRequest(
@@ -122,10 +150,44 @@ class ObjectDetectionHandler (
 
         var validImage = false
         val connectionId = input.requestContext.connectionId
+        val routeKey = input.requestContext.routeKey ?: "unknown"
         val rawData = input.body ?: "{}"
         var imageBytes: ByteArray = ByteArray(0)
 
+        
+        val domainName = input.requestContext.domainName
+        val stage = input.requestContext.stage
+        val endpoint = "https://$domainName/$stage"
+
+        val apiClient = apiGatewayFactory(endpoint)
+
         loadClassHeightCache(logger)
+
+        // Handle $default route (debugging - should not normally be used)
+        if (routeKey == "\$default") {
+            logger.log("WARNING: Message received on \$default route - route selection may have failed")
+            logger.log("Raw body (first 200 chars): ${rawData.take(200)}")
+            
+            // Try to send error response
+            val errorResponse = mapper.writeValueAsString(mapOf(
+                "status" to "error",
+                "error" to "Message received on \$default route. Route selection failed. Check that your message has 'action' field."
+            ))
+            
+            try {
+                val postRequest = PostToConnectionRequest.builder()
+                    .connectionId(connectionId)
+                    .data(SdkBytes.fromByteArray(errorResponse.toByteArray()))
+                    .build()
+                apiClient!!.postToConnection(postRequest)
+                logger.log("Sent error response for \$default route")
+            } catch (e: Exception) {
+                logger.log("Failed to send error response: ${e.message}")
+            }
+            
+            return APIGatewayV2WebSocketResponse().apply { statusCode = 200 }
+        }
+        
 
         logger.log("Processing frame from connection: $connectionId")
         if (rawData == "{}") {
@@ -134,22 +196,36 @@ class ObjectDetectionHandler (
         }
 
         try {
+            logger.log("Parsing JSON body...")
             val jsonMap = mapper.readValue(rawData, Map::class.java)
             val imageBase64 = jsonMap["body"] as? String ?: ""
+            logger.log("Base64 string length: ${imageBase64.length}")
 
             if (imageBase64.isNotEmpty()) {
+                logger.log("Decoding base64...")
                 imageBytes = Base64.getDecoder().decode(imageBase64)
+                logger.log("Decoded image size: ${imageBytes.size} bytes")
 
                 // Check Magic Bytes for JPEG (First 2 bytes are FF D8)
-                if (imageBytes.size > 2 && 
+                val isJpeg = imageBytes.size > 2 && 
                     imageBytes[0] == 0xFF.toByte() && 
-                    imageBytes[1] == 0xD8.toByte()) {
-                        
+                    imageBytes[1] == 0xD8.toByte()
+                
+                // Check Magic Bytes for PNG (First 8 bytes are 89 50 4E 47 0D 0A 1A 0A)
+                val isPng = imageBytes.size > 8 &&
+                    imageBytes[0] == 0x89.toByte() &&
+                    imageBytes[1] == 0x50.toByte() &&  // P
+                    imageBytes[2] == 0x4E.toByte() &&  // N
+                    imageBytes[3] == 0x47.toByte()     // G
+
+                if (isJpeg) {
                     logger.log("Valid JPEG Frame detected. Size: ${imageBytes.size}")
                     validImage = true
-                    
+                } else if (isPng) {
+                    logger.log("Valid PNG Frame detected. Size: ${imageBytes.size}")
+                    validImage = true
                 } else {
-                    logger.log("Data received, but header is not JPEG.")
+                    logger.log("Data received, but header is not JPEG or PNG.")
                 }
             }
         } catch (e: IllegalArgumentException) {
@@ -178,19 +254,16 @@ class ObjectDetectionHandler (
             val responseMessage = mapper.writeValueAsString(responsePayload)
             logger.log("Sending response: $responseMessage")
 
-            val domain = input.requestContext.domainName
-            val stage = input.requestContext.stage
-            val callbackUrl = "https://$domain/$stage"
-
             val postRequest = PostToConnectionRequest.builder()
                 .connectionId(connectionId)
-                .data(SdkBytes.fromByteArray(responseMessage.toByteArray()))
+                .data(SdkBytes.fromByteArray(responseJson.toByteArray()))
                 .build()
 
-            apiGatewayFactory(callbackUrl).postToConnection(postRequest)
+            apiClient!!.postToConnection(postRequest)
             logger.log("Response sent to connection: $connectionId")
         } catch (e: Exception) {
-            logger.log("Caught exception while sending acknowledgment: ${e.message}")
+            logger.log("Caught exception while sending response: ${e.message}")
+            e.printStackTrace()
         }
 
         return APIGatewayV2WebSocketResponse().apply {

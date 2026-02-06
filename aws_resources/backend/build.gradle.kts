@@ -28,6 +28,7 @@ dependencies {
     implementation("software.amazon.awssdk:sagemakerruntime")
     
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.14.2")
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.14.2")
     implementation(kotlin("stdlib"))
 
     // Test dependencies
