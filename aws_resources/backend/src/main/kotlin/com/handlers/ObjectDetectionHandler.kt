@@ -3,22 +3,142 @@ import com.amazonaws.services.lambda.runtime.events.APIGatewayV2WebSocketEvent
 import com.amazonaws.services.lambda.runtime.events.APIGatewayV2WebSocketResponse
 import com.amazonaws.services.lambda.runtime.Context
 import com.amazonaws.services.lambda.runtime.RequestHandler
+import com.amazonaws.services.lambda.runtime.LambdaLogger
 import software.amazon.awssdk.auth.credentials.EnvironmentVariableCredentialsProvider
 import software.amazon.awssdk.core.SdkBytes
 import software.amazon.awssdk.regions.Region
+import software.amazon.awssdk.services.sagemakerruntime.SageMakerRuntimeClient
 import software.amazon.awssdk.services.apigatewaymanagementapi.ApiGatewayManagementApiClient
 import software.amazon.awssdk.services.apigatewaymanagementapi.model.PostToConnectionRequest
 import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient
+import software.amazon.awssdk.services.dynamodb.DynamoDbClient
+import software.amazon.awssdk.services.dynamodb.model.ScanRequest
 import java.net.URI
 import java.util.Base64
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.services.SageMakerClient
 import com.models.InferenceResult
+import com.models.BoundingBox
+import kotlin.collections.emptyList
 
-class ObjectDetectionHandler : RequestHandler<APIGatewayV2WebSocketEvent, APIGatewayV2WebSocketResponse> {
+data class DetectedObject(
+    val obj: BoundingBox,
+    val distanceMeters: Double
+)
 
-    private var apiClient: ApiGatewayManagementApiClient? = null
+class ObjectDetectionHandler (
+    private val ddbClient: DynamoDbClient = DynamoDbClient.builder()
+        .region(Region.US_EAST_1)
+        .httpClient(UrlConnectionHttpClient.create())
+        .build(),
+    
+    private val sagemakerClient: SageMakerRuntimeClient = SageMakerRuntimeClient.builder()
+        .region(Region.US_EAST_1)
+        .httpClient(UrlConnectionHttpClient.create())
+        .build(),
+
+    private val configTableName: String = System.getenv("CONFIG_TABLE_NAME") ?: "default-table",
+
+    private val apiGatewayFactory: (String) -> ApiGatewayManagementApiClient = { endpointUrl ->
+        ApiGatewayManagementApiClient.builder()
+            .region(Region.US_EAST_1)
+            .endpointOverride(URI.create(endpointUrl))
+            .credentialsProvider(EnvironmentVariableCredentialsProvider.create())
+            .httpClient(UrlConnectionHttpClient.create())
+            .build()
+    }
+
+) : RequestHandler<APIGatewayV2WebSocketEvent, APIGatewayV2WebSocketResponse> {
+
     private val mapper = jacksonObjectMapper()
+
+    companion object {
+        internal val classHeightMap = mutableMapOf<String, Float>()
+        internal var isCacheLoaded = false
+    }
+    
+    private fun loadClassHeightCache(logger: LambdaLogger) {
+        if (isCacheLoaded) {
+            return
+        }
+        
+        val tableName = System.getenv("CONFIG_TABLE_NAME")
+        try {
+            val request = ScanRequest.builder().tableName(tableName).build()
+            val response = ddbClient.scan(request)
+
+            for (item in response.items()) {
+                val name = item["class_name"]?.n()?.toString()
+                val height = item["avg_height_meters"]?.s()?.toFloatOrNull()
+
+                if (name != null && height != null) {
+                    classHeightMap[name] = height
+                }
+            }
+            isCacheLoaded = true
+            logger.log("Class height cache loaded with ${classHeightMap.size} entries.")
+        } catch (e: Exception) {
+            logger.log("Error loading class height cache: ${e.message}")
+            classHeightMap["person"] = 1.7f // Default height
+        }
+    }
+    
+    fun estimateDistance(height: Int, obj: String, focalLength: Double = 800.0): Double {
+        val avgHeight = classHeightMap[obj] ?: 1.7f
+
+        val perceivedHeight = height.toDouble()
+        if (perceivedHeight == 0.0) {
+            return 0.0
+        }
+
+        return (avgHeight * focalLength) / perceivedHeight
+    }
+
+    fun estimateDistances(detections: List<BoundingBox>): List<DetectedObject> {
+        if (detections.isEmpty()) {
+            return emptyList()
+        }
+
+        val detectedObjects = mutableListOf<DetectedObject>()
+
+        detections.forEach( {
+            val distance = estimateDistance(it.height.toInt(), it.className)
+            detectedObjects.add(DetectedObject(it, distance))
+        })
+        return detectedObjects
+    }
+
+    fun getDetections(validImage: Boolean, imageBytes: ByteArray, logger: LambdaLogger): List<BoundingBox> {
+        // Process with SageMaker if valid image (JPEG or PNG)
+        val inferenceResult: InferenceResult = if (validImage && imageBytes.isNotEmpty()) {
+            try {
+                logger.log("Calling SageMaker endpoint for inference...")
+                val startTime = System.currentTimeMillis()
+                
+                val result = SageMakerClient.invokeEndpoint(imageBytes)
+                
+                val endTime = System.currentTimeMillis()
+                logger.log("SageMaker inference completed in ${endTime - startTime}ms")
+                logger.log("Detections found: ${result.metadata?.detectionCount ?: 0}")
+                
+                result
+            } catch (e: Exception) {
+                logger.log("Error calling SageMaker: ${e.message}")
+                e.printStackTrace()
+                InferenceResult(
+                    status = "error",
+                    error = "Failed to call SageMaker: ${e.message}"
+                )
+            }
+        } else {
+            // Invalid image or no image
+            InferenceResult(
+                status = "error",
+                error = "Invalid image format. Supported formats: JPEG, PNG"
+            )
+        }
+        return inferenceResult.detections
+    }
 
     override fun handleRequest(
         input: APIGatewayV2WebSocketEvent, 
@@ -31,24 +151,15 @@ class ObjectDetectionHandler : RequestHandler<APIGatewayV2WebSocketEvent, APIGat
         val routeKey = input.requestContext.routeKey ?: "unknown"
         val rawData = input.body ?: "{}"
         var imageBytes: ByteArray = ByteArray(0)
+
         
-        logger.log("=== WebSocket Request ===")
-        logger.log("Route: $routeKey")
-        logger.log("Connection: $connectionId")
-        logger.log("Body size: ${rawData.length} bytes")
+        val domainName = input.requestContext.domainName
+        val stage = input.requestContext.stage
+        val endpoint = "https://$domainName/$stage"
 
-        if (apiClient == null) {
-            val domainName = input.requestContext.domainName
-            val stage = input.requestContext.stage
-            val endpoint = "https://$domainName/$stage"
+        val apiClient = apiGatewayFactory(endpoint)
 
-            apiClient = ApiGatewayManagementApiClient.builder()
-                .credentialsProvider(EnvironmentVariableCredentialsProvider.create())
-                .region(Region.US_EAST_1) // Adjust region as necessary
-                .endpointOverride(URI.create(endpoint))
-                .httpClient(UrlConnectionHttpClient.create())
-                .build()
-        }
+        loadClassHeightCache(logger)
 
         // Handle $default route (debugging - should not normally be used)
         if (routeKey == "\$default") {
@@ -66,7 +177,7 @@ class ObjectDetectionHandler : RequestHandler<APIGatewayV2WebSocketEvent, APIGat
                     .connectionId(connectionId)
                     .data(SdkBytes.fromByteArray(errorResponse.toByteArray()))
                     .build()
-                apiClient!!.postToConnection(postRequest)
+                apiClient.postToConnection(postRequest)
                 logger.log("Sent error response for \$default route")
             } catch (e: Exception) {
                 logger.log("Failed to send error response: ${e.message}")
@@ -75,6 +186,7 @@ class ObjectDetectionHandler : RequestHandler<APIGatewayV2WebSocketEvent, APIGat
             return APIGatewayV2WebSocketResponse().apply { statusCode = 200 }
         }
         
+
         logger.log("Processing frame from connection: $connectionId")
         if (rawData == "{}") {
             logger.log("Warning: Received empty frame.")
@@ -114,53 +226,39 @@ class ObjectDetectionHandler : RequestHandler<APIGatewayV2WebSocketEvent, APIGat
                     logger.log("Data received, but header is not JPEG or PNG.")
                 }
             }
-    
-
         } catch (e: IllegalArgumentException) {
             logger.log("Error: Payload is not valid Base64. ${e.message}")
         }
 
-        // Process with SageMaker if valid image (JPEG or PNG)
-        val inferenceResult: InferenceResult = if (validImage && imageBytes.isNotEmpty()) {
-            try {
-                logger.log("Calling SageMaker endpoint for inference...")
-                val startTime = System.currentTimeMillis()
-                
-                val result = SageMakerClient.invokeEndpoint(imageBytes)
-                
-                val endTime = System.currentTimeMillis()
-                logger.log("SageMaker inference completed in ${endTime - startTime}ms")
-                logger.log("Detections found: ${result.metadata?.detectionCount ?: 0}")
-                
-                result
-            } catch (e: Exception) {
-                logger.log("Error calling SageMaker: ${e.message}")
-                e.printStackTrace()
-                InferenceResult(
-                    status = "error",
-                    error = "Failed to call SageMaker: ${e.message}"
+        //TODO: Run object detection on the imageBytes
+        val detections = getDetections(validImage, imageBytes, logger)
+
+        val estimatedDistances = estimateDistances(detections)
+
+        try {
+            val distancesList = estimatedDistances.map { detected ->
+                mapOf(
+                    "className" to detected.obj.className,
+                    "distance" to String.format(java.util.Locale.US, "%.3f", detected.distanceMeters)
                 )
             }
-        } else {
-            // Invalid image or no image
-            InferenceResult(
-                status = "error",
-                error = "Invalid image format. Supported formats: JPEG, PNG"
-            )
-        }
 
-        // Send response back via WebSocket
-        try {
-            val responseJson = mapper.writeValueAsString(inferenceResult)
-            logger.log("Sending inference results to connection: $connectionId")
+            val responsePayload = mapOf(
+                "frameSize" to imageBytes.size,
+                "valid" to validImage,
+                "estimatedDistances" to distancesList
+            )
+
+            val responseMessage = mapper.writeValueAsString(responsePayload)
+            logger.log("Sending response: $responseMessage")
 
             val postRequest = PostToConnectionRequest.builder()
                 .connectionId(connectionId)
-                .data(SdkBytes.fromByteArray(responseJson.toByteArray()))
+                .data(SdkBytes.fromByteArray(responseMessage.toByteArray()))
                 .build()
 
-            apiClient!!.postToConnection(postRequest)
-            logger.log("Response sent successfully")
+            apiClient.postToConnection(postRequest)
+            logger.log("Response sent to connection: $connectionId")
         } catch (e: Exception) {
             logger.log("Caught exception while sending response: ${e.message}")
             e.printStackTrace()

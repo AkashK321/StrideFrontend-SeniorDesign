@@ -47,8 +47,8 @@ def test_dataflow(api_base_url):
         # Parse JSON response
         try:
             result_1 = json.loads(response_1)
-            assert result_1.get("status") == "error", \
-                f"Expected error status for bad data, got: {result_1.get('status')}"
+            assert result_1.get("valid") == False, \
+                f"Expected error status for bad data, got: {result_1.get('valid')}"
             print("✅ Invalid data correctly rejected")
         except json.JSONDecodeError:
             # Fallback for old response format
@@ -77,14 +77,13 @@ def test_dataflow(api_base_url):
         # Parse JSON response (new format with SageMaker inference)
         try:
             result_2 = json.loads(response_2)
-            assert result_2.get("status") == "success", \
-                f"Expected success status for valid JPEG, got: {result_2.get('status')}"
+            assert result_2.get("valid") == True, \
+                f"Expected success status for valid JPEG, got: {result_2.get('valid')}"
             
             # Validate structure
-            assert "detections" in result_2, "Response missing 'detections' field"
-            assert "metadata" in result_2, "Response missing 'metadata' field"
+            assert "estimatedDistances" in result_2, "Response missing 'estimatedDistances' field"
             
-            detection_count = len(result_2.get("detections", []))
+            detection_count = len(result_2.get("estimatedDistances", []))
             print(f"✅ Valid JPEG processed successfully")
             print(f"   Detections found: {detection_count}")
             
