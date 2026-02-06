@@ -69,6 +69,10 @@ aws_resources/schema_initializer/pycparser/
 aws_resources/schema_initializer/dateutil/
 aws_resources/schema_initializer/six.py
 aws_resources/schema_initializer/*.env
+aws_resources/schema_initializer/*.dist-info/
+aws_resources/schema_initializer/__pycache__/
+aws_resources/schema_initializer/cfnresponse/
+aws_resources/schema_initializer/urllib3/
 
 # Ignore metadata and cache files in that folder
 aws_resources/schema_initializer/*.dist-info/

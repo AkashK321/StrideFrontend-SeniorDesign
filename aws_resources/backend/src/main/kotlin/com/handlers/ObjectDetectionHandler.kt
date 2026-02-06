@@ -18,6 +18,14 @@ class ObjectDetectionHandler : RequestHandler<APIGatewayV2WebSocketEvent, APIGat
     private var apiClient: ApiGatewayManagementApiClient? = null
     private val mapper = jacksonObjectMapper()
 
+    fun estimateDistance(x: Int, y: Int, width: Int, height: Int, obj: String): Double {
+        val focalLength = 700.0 // Example focal length in pixels
+        val realObjectWidth = 0.5 // Example real object width in meters
+
+        val perceivedWidth = width.toDouble()
+        return (realObjectWidth * focalLength) / perceivedWidth
+    }
+
     override fun handleRequest(
         input: APIGatewayV2WebSocketEvent, 
         context: Context,

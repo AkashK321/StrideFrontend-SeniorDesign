@@ -2,7 +2,7 @@
 CloudFormation stack definition
 '''
 
-
+from time import time
 from aws_cdk import (
     Stack,
     Duration,
@@ -13,10 +13,12 @@ from aws_cdk import (
     aws_apigatewayv2_integrations as integrations,
     aws_ec2 as ec2,
     aws_rds as rds,
+    aws_dynamodb as ddb,
     RemovalPolicy,
     custom_resources as cr,
     BundlingOptions,
     aws_iam as iam,
+    CustomResource
 )
 from constructs import Construct
 import os
@@ -107,7 +109,6 @@ class CdkStack(Stack):
             snap_start=_lambda.SnapStartConf.ON_PUBLISHED_VERSIONS,
         )
 
-
         # Define the API Gateway REST API
         api = apigw.LambdaRestApi(
             self, "BusinessApi",
@@ -156,6 +157,41 @@ class CdkStack(Stack):
             description="Stack name used for this deployment"
         )
 
+        # Setup DynamoDB Table to map Object Avg Heights for distance estimation
+        coco_config_table = ddb.Table(
+            self, "CocoConfigTable",
+            partition_key=ddb.Attribute(
+                name="class_id",
+                type=ddb.AttributeType.NUMBER
+            ),
+            removal_policy=RemovalPolicy.DESTROY, # For dev/testing
+            billing_mode=ddb.BillingMode.PAY_PER_REQUEST
+        )
+
+        coco_config_table.grant_read_data(object_detection_handler)
+        object_detection_handler.add_environment("CONFIG_TABLE_NAME", coco_config_table.table_name)
+
+        init_coco_config = _lambda.Function(
+            self, "ObjDetectionConfigLambda",
+            runtime=_lambda.Runtime.PYTHON_3_10,
+            handler="populate_obj_ddb.handler",
+            code=_lambda.Code.from_asset("schema_initializer"),
+            timeout=Duration.seconds(30),
+            environment={
+                "TABLE_NAME": coco_config_table.table_name
+            }
+        )
+
+        coco_config_table.grant_write_data(init_coco_config)
+
+        CustomResource(
+            self, "TriggerCOCOConfigInit",
+            service_token=init_coco_config.function_arn,
+            properties={
+                "RunOnDeploy": str(time()) 
+            }
+        )
+
         # TODO: RDS setup disabled for now - to be re-enabled when ready
         # Define RDS Resource
         # db_instance = rds.DatabaseInstance(
@@ -181,7 +217,7 @@ class CdkStack(Stack):
         # schema_lambda = _lambda.Function(
         #     self, "SchemaInitializer",
         #     runtime=_lambda.Runtime.PYTHON_3_9,
-        #     handler="handler.handler",
+        #     handler="populate_rds.handler",
         #     code=_lambda.Code.from_asset("schema_initializer"),
         #     timeout=Duration.seconds(30),
         #     environment={
