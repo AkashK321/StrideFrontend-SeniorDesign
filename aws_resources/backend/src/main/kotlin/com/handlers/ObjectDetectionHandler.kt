@@ -39,7 +39,6 @@ class ObjectDetectionHandler (
         .httpClient(UrlConnectionHttpClient.create())
         .build(),
 
-    private val endpointName: String = System.getenv("ENDPOINT_NAME") ?: "default-endpoint",
     private val configTableName: String = System.getenv("CONFIG_TABLE_NAME") ?: "default-table",
 
     private val apiGatewayFactory: (String) -> ApiGatewayManagementApiClient = { endpointUrl ->
@@ -179,12 +178,16 @@ class ObjectDetectionHandler (
             val responseMessage = mapper.writeValueAsString(responsePayload)
             logger.log("Sending response: $responseMessage")
 
+            val domain = input.requestContext.domainName
+            val stage = input.requestContext.stage
+            val callbackUrl = "https://$domain/$stage"
+
             val postRequest = PostToConnectionRequest.builder()
                 .connectionId(connectionId)
                 .data(SdkBytes.fromByteArray(responseMessage.toByteArray()))
                 .build()
 
-            apiGatewayFactory(endpointName).postToConnection(postRequest)
+            apiGatewayFactory(callbackUrl).postToConnection(postRequest)
             logger.log("Response sent to connection: $connectionId")
         } catch (e: Exception) {
             logger.log("Caught exception while sending acknowledgment: ${e.message}")
