@@ -16,6 +16,8 @@ import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 import software.amazon.awssdk.services.dynamodb.model.ScanRequest
 import software.amazon.awssdk.services.dynamodb.model.ScanResponse
 import software.amazon.awssdk.services.sagemakerruntime.SageMakerRuntimeClient
+import com.models.InferenceResult
+import com.models.BoundingBox
 import java.util.Base64
 
 class ObjectDetectionHandlerTest {
@@ -63,15 +65,18 @@ class ObjectDetectionHandlerTest {
         // 2. MOCK THE PRIVATE getDetections FUNCTION
         // This bypasses the actual logic (and the TODO/SageMaker call) entirely
         val fakeDetections = listOf(
-            Detection(
-                classId = 0, // Person
-                confidence = 0.95f,
-                bbox = listOf(320.0f, 320.0f, 200.0f, 640.0f) // Height = 640px
+            BoundingBox(
+                x = 320,
+                y = 320,
+                width = 200,
+                height = 640,
+                className = "person",
+                confidence = 0.95f
             )
         )
         
         // Mock the public getDetections function which accepts a single ByteArray
-        every { handler.getDetections(any<ByteArray>()) } returns fakeDetections
+        every { handler.getDetections(false, any<ByteArray>(), mockLogger) } returns fakeDetections
 
         // 3. Create Input Event
         val imageBytes = "fake_image_bytes".toByteArray()

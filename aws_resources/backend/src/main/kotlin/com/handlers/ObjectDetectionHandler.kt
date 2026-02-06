@@ -21,14 +21,8 @@ import com.models.InferenceResult
 import com.models.BoundingBox
 import kotlin.collections.emptyList
 
-data class Detection(
-    val classId: Int, //COCO class id
-    val confidence: Float,
-    val bbox: List<Float>, // [x, y, w, h]
-)
-
 data class DetectedObject(
-    val obj: Detection,
+    val obj: BoundingBox,
     val distanceMeters: Double
 )
 
@@ -59,7 +53,7 @@ class ObjectDetectionHandler (
     private val mapper = jacksonObjectMapper()
 
     companion object {
-        internal val classHeightMap = mutableMapOf<Int, Float>()
+        internal val classHeightMap = mutableMapOf<String, Float>()
         internal var isCacheLoaded = false
     }
     
@@ -74,29 +68,33 @@ class ObjectDetectionHandler (
             val response = ddbClient.scan(request)
 
             for (item in response.items()) {
-                val id = item["class_id"]?.n()?.toIntOrNull()
+                val name = item["class_name"]?.n()?.toString()
                 val height = item["avg_height_meters"]?.s()?.toFloatOrNull()
 
-                if (id != null && height != null) {
-                    classHeightMap[id] = height
+                if (name != null && height != null) {
+                    classHeightMap[name] = height
                 }
             }
             isCacheLoaded = true
             logger.log("Class height cache loaded with ${classHeightMap.size} entries.")
         } catch (e: Exception) {
             logger.log("Error loading class height cache: ${e.message}")
-            classHeightMap[0] = 1.7f // Default height
+            classHeightMap["person"] = 1.7f // Default height
         }
     }
     
-    fun estimateDistance(height: Int, obj: Int, focalLength: Double = 800.0): Double {
+    fun estimateDistance(height: Int, obj: String, focalLength: Double = 800.0): Double {
         val avgHeight = classHeightMap[obj] ?: 1.7f
 
         val perceivedHeight = height.toDouble()
+        if (perceivedHeight == 0.0) {
+            return 0.0
+        }
+
         return (avgHeight * focalLength) / perceivedHeight
     }
 
-    fun estimateDistances(detections: List<Detection>): List<DetectedObject> {
+    fun estimateDistances(detections: List<BoundingBox>): List<DetectedObject> {
         if (detections.isEmpty()) {
             return emptyList()
         }
@@ -104,13 +102,13 @@ class ObjectDetectionHandler (
         val detectedObjects = mutableListOf<DetectedObject>()
 
         detections.forEach( {
-            val distance = estimateDistance(it.bbox[3].toInt(), it.classId)
+            val distance = estimateDistance(it.height.toInt(), it.className)
             detectedObjects.add(DetectedObject(it, distance))
         })
         return detectedObjects
     }
 
-    fun getDetections(imageBytes: ByteArray): List<BoundingBox> {
+    fun getDetections(validImage: Boolean, imageBytes: ByteArray, logger: LambdaLogger): List<BoundingBox> {
         // Process with SageMaker if valid image (JPEG or PNG)
         val inferenceResult: InferenceResult = if (validImage && imageBytes.isNotEmpty()) {
             try {
@@ -139,7 +137,7 @@ class ObjectDetectionHandler (
                 error = "Invalid image format. Supported formats: JPEG, PNG"
             )
         }
-        return inferenceResult.detections ?: emptyList()
+        return inferenceResult.detections
     }
 
     override fun handleRequest(
@@ -179,7 +177,7 @@ class ObjectDetectionHandler (
                     .connectionId(connectionId)
                     .data(SdkBytes.fromByteArray(errorResponse.toByteArray()))
                     .build()
-                apiClient!!.postToConnection(postRequest)
+                apiClient.postToConnection(postRequest)
                 logger.log("Sent error response for \$default route")
             } catch (e: Exception) {
                 logger.log("Failed to send error response: ${e.message}")
@@ -233,14 +231,14 @@ class ObjectDetectionHandler (
         }
 
         //TODO: Run object detection on the imageBytes
-        val detections = getDetections(imageBytes)
+        val detections = getDetections(validImage, imageBytes, logger)
 
         val estimatedDistances = estimateDistances(detections)
 
         try {
             val distancesList = estimatedDistances.map { detected ->
                 mapOf(
-                    "classId" to detected.obj.classId,
+                    "className" to detected.obj.className,
                     "distance" to String.format(java.util.Locale.US, "%.3f", detected.distanceMeters)
                 )
             }
@@ -256,10 +254,10 @@ class ObjectDetectionHandler (
 
             val postRequest = PostToConnectionRequest.builder()
                 .connectionId(connectionId)
-                .data(SdkBytes.fromByteArray(responseJson.toByteArray()))
+                .data(SdkBytes.fromByteArray(responseMessage.toByteArray()))
                 .build()
 
-            apiClient!!.postToConnection(postRequest)
+            apiClient.postToConnection(postRequest)
             logger.log("Response sent to connection: $connectionId")
         } catch (e: Exception) {
             logger.log("Caught exception while sending response: ${e.message}")
