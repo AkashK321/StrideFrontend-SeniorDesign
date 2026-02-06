@@ -16,11 +16,15 @@ import java.net.URI
 import java.util.Base64
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 
-data class DetectionResult(
+data class Detection(
     val classId: Int, //COCO class id
     val confidence: Float,
     val bbox: List<Float>, // [x, y, w, h]
-    val distanceMeters: Float
+)
+
+data class DetectedObject(
+    val object: Detection,
+    val distanceMeters: Double
 )
 
 class ObjectDetectionHandler : RequestHandler<APIGatewayV2WebSocketEvent, APIGatewayV2WebSocketResponse> {
@@ -71,17 +75,21 @@ class ObjectDetectionHandler : RequestHandler<APIGatewayV2WebSocketEvent, APIGat
         return (avgHeight * focalLength) / perceivedHeight
     }
 
-    fun estimateDistances(detections: List<DetectionResult>): List<DetectionResult> {
-        return detections.map { detection ->
-            val distance = estimateDistance(
-                height = detection.bbox[3].toInt(),
-                obj = detection.classId
-            )
-            detection.copy(distanceMeters = distance.toFloat())
+    fun estimateDistances(detections: List<Detection>): List<DetectedObject> {
+        if (detections.isEmpty()) {
+            return emptyList()
         }
+
+        val detectedObjects = mutableListOf<DetectedObject>()
+
+        detections.forEach( {
+            val distance = estimateDistance(it.bbox[3].toInt(), it.classId)
+            detectedObjects.add(DetectedObject(it, distance))
+        })
+        return detectedObjects
     }
 
-    fun getDetections(imageBytes: ByteArray): List<DetectionResult> {
+    fun getDetections(imageBytes: ByteArray): List<Detection> {
         TODO("Implement object detection logic with SageMaker")
     }
 
