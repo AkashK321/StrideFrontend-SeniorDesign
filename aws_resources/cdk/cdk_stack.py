@@ -18,7 +18,7 @@ from aws_cdk import (
     custom_resources as cr,
     BundlingOptions,
     aws_iam as iam,
-    CustomResource
+    CustomResource,
     aws_ecr as ecr,
     aws_sagemaker as sagemaker,
 )
