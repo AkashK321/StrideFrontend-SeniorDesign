@@ -96,13 +96,69 @@ jobs:
           
           echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
       
-      # Step 2: Checkout the branch (needed for CDK to determine stack name from app.py)
-      - name: Checkout branch
+      # Step 2: Checkout the repository (use main branch since feature branch may be deleted)
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ steps.branch-info.outputs.branch_name || github.event.pull_request.head.ref || inputs.branch_name }}
+          ref: main  # Checkout main instead of deleted branch
       
-      # Step 3: Set up Python
+      # Step 3: Calculate stack name from branch name (reuse app.py logic)
+      - name: Calculate stack name
+        id: stack-name
+        working-directory: aws_resources
+        run: |
+          BRANCH_NAME="${{ steps.branch-info.outputs.branch_name }}"
+          
+          # Use Python to calculate stack name using same logic as app.py
+          STACK_NAME=$(python3 << EOF
+          import re
+          import sys
+          
+          branch_name = "$BRANCH_NAME".lower()
+          
+          # Special handling for main branch
+          if branch_name == "main":
+              print("StrideStack")
+              sys.exit(0)
+          
+          # Enforce branch naming convention: <tag>/<issue-number>-<description>
+          convention_pattern = r"^([a-z0-9-]+)/([0-9]+)-(.+)$"
+          match = re.match(convention_pattern, branch_name)
+          
+          if not match:
+              print(f"ERROR: Branch name does not match convention: {branch_name}", file=sys.stderr)
+              sys.exit(1)
+          
+          tag, issue_num, description = match.groups()
+          
+          # Sanitize description: alphanumeric and hyphens only, truncate to 20 chars
+          description = re.sub(r"[^a-z0-9-]", "-", description)
+          description = re.sub(r"^-+|-+$", "", description)[:20]
+          
+          if not description or description == "-":
+              print(f"ERROR: Invalid description after sanitization", file=sys.stderr)
+              sys.exit(1)
+          
+          # Build sanitized name: tag-issue-description
+          sanitized = f"{tag}-{issue_num}-{description}"
+          
+          # Final stack name: StrideStack-{sanitized}
+          if len(sanitized) > 100:
+              sanitized = sanitized[:100]
+          
+          print(f"StrideStack-{sanitized}")
+          EOF
+          )
+          
+          if [ -z "$STACK_NAME" ]; then
+            echo "ERROR: Failed to calculate stack name from branch name"
+            exit 1
+          fi
+          
+          echo "Stack name: $STACK_NAME"
+          echo "stack_name=$STACK_NAME" >> $GITHUB_OUTPUT
+      
+      # Step 4: Set up Python
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -110,51 +166,31 @@ jobs:
           cache: 'pip'
           cache-dependency-path: aws_resources/requirements.txt
       
-      # Step 4: Install Python dependencies
+      # Step 5: Install Python dependencies
       - name: Install Python dependencies
         working-directory: aws_resources
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
       
-      # Step 5: Set up Node.js for CDK
+      # Step 6: Set up Node.js for CDK
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
       
-      # Step 6: Install CDK
+      # Step 7: Install CDK
       - name: Install CDK
         run: npm install -g aws-cdk
       
-      # Step 7: Configure AWS credentials
+      # Step 8: Configure AWS credentials
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: us-east-1
       
-      # Step 8: Get stack name from CDK app
-      - name: Get stack name
-        id: stack-name
-        working-directory: aws_resources
-        env:
-          CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
-        run: |
-          # Use CDK list to get the stack name (app.py reads branch from git, same as deploy)
-          # This ensures we get the exact same stack name that was used during deployment
-          STACK_NAME=$(cdk list 2>/dev/null | grep -E "^StrideStack" | head -1)
-          
-          if [ -z "$STACK_NAME" ]; then
-            echo "ERROR: Failed to determine stack name from CDK app"
-            echo "This may indicate the branch name doesn't match the expected convention"
-            exit 1
-          fi
-          
-          echo "Stack name: $STACK_NAME"
-          echo "stack_name=$STACK_NAME" >> $GITHUB_OUTPUT
-      
-      # Step 9: Destroy CDK stack
+      # Step 9: Destroy CDK stack (removed the "Get stack name" step since we calculate it above)
       - name: Destroy CDK stack
         working-directory: aws_resources
         env:
@@ -180,8 +216,8 @@ jobs:
           STACK_NAME="${{ steps.stack-name.outputs.stack_name }}"
           BRANCH_NAME="${{ steps.branch-info.outputs.branch_name }}"
           
-          # Check if stack still exists using CDK list
-          if cdk list --long 2>/dev/null | grep -q "$STACK_NAME"; then
+          # Check if stack still exists using AWS CLI
+          if aws cloudformation describe-stacks --stack-name "$STACK_NAME" --region us-east-1 2>/dev/null | grep -q "\"StackName\": \"$STACK_NAME\""; then
             STATUS="Stack still exists (deletion may be in progress)"
             CLEANUP_STATUS="in_progress"
           else
@@ -214,6 +250,5 @@ jobs:
           if [ "$CLEANUP_STATUS" != "completed" ]; then
             exit 1
           fi
-        working-directory: aws_resources
         env:
           CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
