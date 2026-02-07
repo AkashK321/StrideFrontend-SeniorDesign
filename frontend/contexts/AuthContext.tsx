@@ -130,11 +130,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setIsAuthenticated(true);
       return true;
+    
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       
-      // If endpoint doesn't exist (404), don't clear tokens - allow user to continue
-      if (errorMessage.includes("not implemented") || errorMessage.includes("404")) {
+      // If endpoint doesn't exist (404/403), don't clear tokens - allow user to continue
+      if (errorMessage.includes("not implemented") || 
+          errorMessage.includes("404") || 
+          errorMessage.includes("403") ||
+          errorMessage.includes("Missing Authentication Token")) {
         console.warn("Refresh endpoint not available, using existing tokens");
         return false; // Return false but keep auth state
       }

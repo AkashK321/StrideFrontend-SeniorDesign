@@ -74,7 +74,8 @@ export async function refreshToken(refreshToken: string): Promise<RefreshTokenRe
 
   const data = await response.json();
 
-  if (response.status === 404) {
+  // API Gateway returns 403 for missing routes, 404 for not found
+  if (response.status === 404 || response.status === 403) {
     throw new Error("Refresh endpoint not implemented. Please log in again.");
   }
 
