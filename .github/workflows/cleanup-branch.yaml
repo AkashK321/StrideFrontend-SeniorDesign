@@ -56,7 +56,8 @@ on:
 #       - 'fix/91-cleanup-permissions'
 #     paths:
 #       - '.github/workflows/cleanup-branch.yaml'
-  
+
+
   workflow_dispatch:
     inputs:
       branch_name:
@@ -74,10 +75,10 @@ jobs:
     name: Cleanup Branch Stack
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    
+
     # Only run if PR was merged, workflow_dispatch, or push (for testing)
     if: github.event.pull_request.merged == true || github.event_name == 'workflow_dispatch'
-    
+
     steps:
       # Step 1: Extract branch name
       - name: Get branch name
@@ -92,9 +93,9 @@ jobs:
           else
             BRANCH_NAME="${{ github.event.pull_request.head.ref }}"
           fi
-          
+
           echo "Branch name: $BRANCH_NAME"
-          
+
           # Safety check: Prevent destroying production stack
           BRANCH_LOWER=$(echo "$BRANCH_NAME" | tr '[:upper:]' '[:lower:]')
           if [ "$BRANCH_LOWER" == "main" ]; then
@@ -103,71 +104,71 @@ jobs:
             echo "Production stack should never be destroyed via this workflow."
             exit 1
           fi
-          
+
           echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
-      
+
       # Step 2: Checkout the repository (use main branch since feature branch may be deleted)
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           ref: main  # Checkout main instead of deleted branch
-      
+
       # Step 3: Calculate stack name from branch name (reuse app.py logic)
       - name: Calculate stack name
         id: stack-name
         working-directory: aws_resources
         run: |
           BRANCH_NAME="${{ steps.branch-info.outputs.branch_name }}"
-          
+
           # Use Python to calculate stack name using same logic as app.py
           STACK_NAME=$(python3 << EOF
           import re
           import sys
-          
+
           branch_name = "$BRANCH_NAME".lower()
-          
+
           # Special handling for main branch
           if branch_name == "main":
               print("StrideStack")
               sys.exit(0)
-          
+
           # Enforce branch naming convention: <tag>/<issue-number>-<description>
           convention_pattern = r"^([a-z0-9-]+)/([0-9]+)-(.+)$"
           match = re.match(convention_pattern, branch_name)
-          
+
           if not match:
               print(f"ERROR: Branch name does not match convention: {branch_name}", file=sys.stderr)
               sys.exit(1)
-          
+
           tag, issue_num, description = match.groups()
-          
+
           # Sanitize description: alphanumeric and hyphens only, truncate to 20 chars
           description = re.sub(r"[^a-z0-9-]", "-", description)
           description = re.sub(r"^-+|-+$", "", description)[:20]
-          
+
           if not description or description == "-":
               print(f"ERROR: Invalid description after sanitization", file=sys.stderr)
               sys.exit(1)
-          
+
           # Build sanitized name: tag-issue-description
           sanitized = f"{tag}-{issue_num}-{description}"
-          
+
           # Final stack name: StrideStack-{sanitized}
           if len(sanitized) > 100:
               sanitized = sanitized[:100]
-          
+
           print(f"StrideStack-{sanitized}")
           EOF
           )
-          
+
           if [ -z "$STACK_NAME" ]; then
             echo "ERROR: Failed to calculate stack name from branch name"
             exit 1
           fi
-          
+
           echo "Stack name: $STACK_NAME"
           echo "stack_name=$STACK_NAME" >> $GITHUB_OUTPUT
-      
+
       # Step 4: Set up Python
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -175,38 +176,38 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
           cache-dependency-path: aws_resources/requirements.txt
-      
+
       # Step 5: Install Python dependencies
       - name: Install Python dependencies
         working-directory: aws_resources
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-      
+
       # Step 6: Set up Node.js for CDK
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-      
+
       # Step 7: Install CDK
       - name: Install CDK
         run: npm install -g aws-cdk
-      
+
       # Step 8: Configure AWS credentials
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: us-east-1
-      
+
         # Step 9: Destroy CDK stack
       - name: Destroy CDK stack
         run: |
           STACK_NAME="${{ steps.stack-name.outputs.stack_name }}"
-          
+
           echo "Destroying stack: $STACK_NAME"
-          
+
           # Use AWS CLI to delete the stack directly (avoids CDK app.py issues)
           # This is more reliable since we already know the exact stack name
           if aws cloudformation delete-stack \
@@ -224,20 +225,20 @@ jobs:
         run: |
           STACK_NAME="${{ steps.stack-name.outputs.stack_name }}"
           BRANCH_NAME="${{ steps.branch-info.outputs.branch_name }}"
-          
+
           echo "Waiting 2 minutes for stack deletion to complete..."
           echo "Stack deletion was initiated for: $STACK_NAME"
           sleep 120  # Wait 2 minutes (120 seconds)
-          
+
           echo "Checking stack status after wait period..."
-          
+
           # Check stack status using AWS CLI
           STACK_STATUS=$(aws cloudformation describe-stacks \
             --stack-name "$STACK_NAME" \
             --region us-east-1 \
             --query 'Stacks[0].StackStatus' \
             --output text 2>/dev/null || echo "NOT_FOUND")
-          
+
           if [ "$STACK_STATUS" == "NOT_FOUND" ]; then
             STATUS="Stack successfully destroyed"
             CLEANUP_STATUS="completed"
@@ -248,9 +249,9 @@ jobs:
             STATUS="Stack still exists with status: $STACK_STATUS"
             CLEANUP_STATUS="failed"
           fi
-          
+
           CLEANUP_TIME=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
-          
+
           # Create job summary
           {
             echo "## Branch Stack Cleanup"
@@ -273,9 +274,9 @@ jobs:
               echo "The stack still exists after the wait period. Please check CloudFormation console."
             fi
           } >> $GITHUB_STEP_SUMMARY
-          
+
           echo "$STATUS"
-          
+
           # Only exit with error if cleanup actually failed (not if it's just in progress)
           if [ "$CLEANUP_STATUS" == "failed" ]; then
             exit 1
