@@ -218,21 +218,35 @@ jobs:
             echo "❌ Failed to initiate stack deletion: $STACK_NAME"
             exit 1
           fi
-      
-      # Step 10: Create cleanup summary
+            # Step 10: Create cleanup summary
       - name: Verify cleanup
         if: always()
         run: |
           STACK_NAME="${{ steps.stack-name.outputs.stack_name }}"
           BRANCH_NAME="${{ steps.branch-info.outputs.branch_name }}"
           
-          # Check if stack still exists using AWS CLI
-          if aws cloudformation describe-stacks --stack-name "$STACK_NAME" --region us-east-1 2>/dev/null | grep -q "\"StackName\": \"$STACK_NAME\""; then
-            STATUS="Stack still exists (deletion may be in progress)"
-            CLEANUP_STATUS="in_progress"
-          else
+          echo "Waiting 5 minutes for stack deletion to complete..."
+          echo "Stack deletion was initiated for: $STACK_NAME"
+          sleep 300  # Wait 5 minutes (300 seconds)
+          
+          echo "Checking stack status after wait period..."
+          
+          # Check stack status using AWS CLI
+          STACK_STATUS=$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" \
+            --region us-east-1 \
+            --query 'Stacks[0].StackStatus' \
+            --output text 2>/dev/null || echo "NOT_FOUND")
+          
+          if [ "$STACK_STATUS" == "NOT_FOUND" ]; then
             STATUS="Stack successfully destroyed"
             CLEANUP_STATUS="completed"
+          elif [ "$STACK_STATUS" == "DELETE_IN_PROGRESS" ] || [ "$STACK_STATUS" == "DELETE_COMPLETE" ]; then
+            STATUS="Stack deletion still in progress (status: $STACK_STATUS)"
+            CLEANUP_STATUS="in_progress"
+          else
+            STATUS="Stack still exists with status: $STACK_STATUS"
+            CLEANUP_STATUS="failed"
           fi
           
           CLEANUP_TIME=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
@@ -245,19 +259,25 @@ jobs:
             echo "- **Branch Name**: \`${BRANCH_NAME}\`"
             echo "- **Stack Name**: \`${STACK_NAME}\`"
             echo "- **Status**: ${STATUS}"
-            echo "- **Cleaned Up At**: \`${CLEANUP_TIME}\`"
+            echo "- **Checked At**: \`${CLEANUP_TIME}\`"
             echo ""
             if [ "$CLEANUP_STATUS" == "completed" ]; then
-              echo "**Cleanup completed successfully**"
+              echo "**✅ Cleanup completed successfully**"
+            elif [ "$CLEANUP_STATUS" == "in_progress" ]; then
+              echo "**⏳ Cleanup in progress** (stack deletion may take additional time)"
+              echo ""
+              echo "The stack deletion was initiated and is proceeding. This is normal for large stacks."
             else
-              echo "**Cleanup in progress** (stack deletion may take a few minutes)"
+              echo "**❌ Cleanup failed**"
+              echo ""
+              echo "The stack still exists after the wait period. Please check CloudFormation console."
             fi
           } >> $GITHUB_STEP_SUMMARY
           
           echo "$STATUS"
           
-          # Exit with error if cleanup failed
-          if [ "$CLEANUP_STATUS" != "completed" ]; then
+          # Only exit with error if cleanup actually failed (not if it's just in progress)
+          if [ "$CLEANUP_STATUS" == "failed" ]; then
             exit 1
           fi
         env:
