@@ -51,11 +51,11 @@ on:
       - '.github/workflows/**'
 
 # This is a test to see if the cleanup branch workflow works
-  # push:
-  #   branches:
-  #     - 'fix/91-cleanup-permissions'
-  #   paths:
-  #     - '.github/workflows/cleanup-branch.yaml'
+  push:
+    branches:
+      - 'fix/91-cleanup-permissions'
+    paths:
+      - '.github/workflows/cleanup-branch.yaml'
   
   workflow_dispatch:
     inputs:
@@ -76,7 +76,7 @@ jobs:
     timeout-minutes: 15
     
     # Only run if PR was merged, workflow_dispatch, or push (for testing)
-    if: github.event.pull_request.merged == true || github.event_name == 'workflow_dispatch'
+    if: github.event.pull_request.merged == true || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
     
     steps:
       # Step 1: Extract branch name
@@ -212,10 +212,10 @@ jobs:
           if aws cloudformation delete-stack \
             --stack-name "$STACK_NAME" \
             --region us-east-1; then
-            echo "✅ Stack deletion initiated: $STACK_NAME"
+            echo "Stack deletion initiated: $STACK_NAME"
             echo "Note: Stack deletion may take several minutes to complete"
           else
-            echo "❌ Failed to initiate stack deletion: $STACK_NAME"
+            echo "Failed to initiate stack deletion: $STACK_NAME"
             exit 1
           fi
             # Step 10: Create cleanup summary
@@ -225,9 +225,9 @@ jobs:
           STACK_NAME="${{ steps.stack-name.outputs.stack_name }}"
           BRANCH_NAME="${{ steps.branch-info.outputs.branch_name }}"
           
-          echo "Waiting 5 minutes for stack deletion to complete..."
+          echo "Waiting 2 minutes for stack deletion to complete..."
           echo "Stack deletion was initiated for: $STACK_NAME"
-          sleep 300  # Wait 5 minutes (300 seconds)
+          sleep 120  # Wait 2 minutes (120 seconds)
           
           echo "Checking stack status after wait period..."
           
