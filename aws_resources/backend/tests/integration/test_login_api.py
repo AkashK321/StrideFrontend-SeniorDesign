@@ -169,7 +169,8 @@ def test_login_invalid_credentials(api_base_url):
     assert response.status_code == 401, f"Expected 401, got {response.status_code}: {response.text}"
     data = response.json()
     assert "error" in data
-    assert "invalid" in data["error"].lower() or "not found" in data["error"].lower()
+    error_lower = data["error"].lower()
+    assert ("invalid" in error_lower or "not found" in error_lower or "does not exist" in error_lower)
 
 
 def test_login_missing_fields(api_base_url):
@@ -276,7 +277,7 @@ def test_register_whitespace_normalization(api_base_url, test_user_credentials):
 
 
 def test_invalid_endpoint(api_base_url):
-    """Test that invalid endpoints return 404."""
+    """Test that invalid endpoints return 404 or 403 (API Gateway behavior)."""
     response = requests.post(
         f"{api_base_url}/invalid",
         json={"username": "test", "password": "test"},
@@ -284,7 +285,13 @@ def test_invalid_endpoint(api_base_url):
         timeout=10
     )
 
-    assert response.status_code == 404, f"Expected 404, got {response.status_code}: {response.text}"
-    data = response.json()
-    assert "error" in data
-    assert "not found" in data["error"].lower()
+    # API Gateway returns 403 for missing routes, not 404
+    assert response.status_code in [403, 404], f"Expected 403 or 404, got {response.status_code}: {response.text}"
+    if response.status_code == 403:
+        # API Gateway returns {"message": "Missing Authentication Token"} for 403
+        data = response.json()
+        assert "message" in data or "error" in data
+    else:
+        data = response.json()
+        assert "error" in data
+        assert "not found" in data["error"].lower()
