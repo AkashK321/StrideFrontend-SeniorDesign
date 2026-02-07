@@ -614,6 +614,295 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /refresh:
+    post:
+      tags:
+        - Authentication
+      summary: Refresh access and ID tokens
+      description: |
+        **⚠️ NOT IMPLEMENTED YET**
+        
+        Refreshes the access token and ID token using a valid refresh token.
+        Uses Cognito's `InitiateAuth` API with `REFRESH_TOKEN_AUTH` flow.
+      operationId: refreshToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - refreshToken
+              properties:
+                refreshToken:
+                  type: string
+                  description: Refresh token obtained from login
+                  example: "eyJjdHkiOiJKV1QiLCJlbmMiOiJBMjU2R0NNIn0..."
+      responses:
+        '200':
+          description: Tokens refreshed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+              examples:
+                success:
+                  summary: Successful token refresh
+                  value:
+                    accessToken: "eyJraWQiOiJcL3Z..."
+                    idToken: "eyJraWQiOiJcL3Z..."
+                    refreshToken: "eyJjdHkiOiJKV1QiLCJlbmMiOiJBMjU2R0NNIn0..."
+                    expiresIn: 3600
+                    tokenType: "Bearer"
+        '400':
+          description: Bad request - missing refresh token or invalid format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized - invalid or expired refresh token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /password/forgot:
+    post:
+      tags:
+        - Authentication
+      summary: Initiate password reset
+      description: |
+        **⚠️ NOT IMPLEMENTED YET**
+        
+        Initiates a password reset flow by sending a verification code to the user's
+        registered email or phone number. Uses Cognito's `ForgotPassword` API.
+      operationId: forgotPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+              properties:
+                username:
+                  type: string
+                  description: Username or email address of the user
+                  example: "johndoe"
+      responses:
+        '200':
+          description: Password reset code sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Password reset code sent to your registered email or phone"
+        '400':
+          description: Bad request - missing username or invalid format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Too many requests - rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /password/reset:
+    post:
+      tags:
+        - Authentication
+      summary: Reset password with verification code
+      description: |
+        **⚠️ NOT IMPLEMENTED YET**
+        
+        Resets the user's password using a verification code sent via email or SMS.
+        Uses Cognito's `ConfirmForgotPassword` API.
+      operationId: resetPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - code
+                - newPassword
+                - newPasswordConfirm
+              properties:
+                username:
+                  type: string
+                  description: Username or email address of the user
+                  example: "johndoe"
+                code:
+                  type: string
+                  description: Verification code sent to email or phone
+                  example: "123456"
+                newPassword:
+                  type: string
+                  description: New password (must meet Cognito password policy)
+                  format: password
+                  example: "NewSecurePass123!"
+                newPasswordConfirm:
+                  type: string
+                  description: Password confirmation (must match newPassword)
+                  format: password
+                  example: "NewSecurePass123!"
+      responses:
+        '200':
+          description: Password reset successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Password reset successfully"
+        '400':
+          description: Bad request - invalid code, password mismatch, or missing fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                passwordMismatch:
+                  summary: Passwords do not match
+                  value:
+                    error: "Passwords do not match"
+                invalidCode:
+                  summary: Invalid verification code
+                  value:
+                    error: "Invalid verification code"
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Too many requests - rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /password/change:
+    post:
+      tags:
+        - Authentication
+      summary: Change password (authenticated)
+      description: |
+        **⚠️ NOT IMPLEMENTED YET**
+        
+        Changes the authenticated user's password. Requires a valid access token.
+        Uses Cognito's `ChangePassword` API.
+      operationId: changePassword
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - currentPassword
+                - newPassword
+                - newPasswordConfirm
+              properties:
+                currentPassword:
+                  type: string
+                  description: User's current password
+                  format: password
+                  example: "OldSecurePass123!"
+                newPassword:
+                  type: string
+                  description: New password (must meet Cognito password policy)
+                  format: password
+                  example: "NewSecurePass123!"
+                newPasswordConfirm:
+                  type: string
+                  description: Password confirmation (must match newPassword)
+                  format: password
+                  example: "NewSecurePass123!"
+      responses:
+        '200':
+          description: Password changed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Password changed successfully"
+        '400':
+          description: Bad request - password mismatch, invalid current password, or missing fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                passwordMismatch:
+                  summary: Passwords do not match
+                  value:
+                    error: "Passwords do not match"
+                invalidCurrentPassword:
+                  summary: Invalid current password
+                  value:
+                    error: "Current password is incorrect"
+        '401':
+          description: Unauthorized - invalid or missing access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Too many requests - rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /items:
     get:
       tags:
@@ -645,6 +934,12 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
 
 components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT access token obtained from login endpoint
   schemas:
     LoginRequest:
       type: object
