@@ -2,7 +2,15 @@
  * API service for making HTTP requests to the backend.
  */
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "https://t0j5kv142j.execute-api.us-east-1.amazonaws.com/prod";
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
+
+if (!API_BASE_URL) {
+  throw new Error(
+    "EXPO_PUBLIC_API_BASE_URL environment variable is not set. " +
+    "Please create a .env file in the frontend directory with EXPO_PUBLIC_API_BASE_URL set to your API Gateway URL. " +
+    "See README.md for instructions."
+  );
+}
 
 export interface LoginRequest {
   username: string;

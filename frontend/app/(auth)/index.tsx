@@ -89,6 +89,9 @@ export default function Landing() {
     TouchableWithoutFeedback,
     {
       onPress: Keyboard.dismiss,
+      accessibilityLabel: "Dismiss keyboard",
+      accessibilityRole: "button",
+      accessible: false, // This is a container, not an interactive element
     },
     React.createElement(
       SafeAreaView,
@@ -111,6 +114,8 @@ export default function Landing() {
           fontSize: 40,
           marginBottom: spacing.sm,
         },
+        accessibilityRole: "header",
+        accessibilityLabel: "Welcome back to Stride",
       },
       "Welcome back to ",
       React.createElement(
@@ -119,6 +124,7 @@ export default function Landing() {
           style: {
             color: colors.primary,
           },
+          accessible: false, // Nested text doesn't need separate accessibility
         },
         "Stride."
       )
@@ -133,6 +139,7 @@ export default function Landing() {
           alignSelf: "flex-start",
           color: colors.textSecondary,
         },
+        accessibilityLabel: "Sign in to your account",
       },
       "Sign in to your account"
     ),
@@ -147,6 +154,8 @@ export default function Landing() {
         passwordRef.current?.focus();
       },
       placeholder: "Username",
+      accessibilityLabel: "Username",
+      accessibilityHint: "Enter your username. Press next to move to password field.",
       style: {
         width: "100%",
         marginBottom: spacing.md,
@@ -162,6 +171,8 @@ export default function Landing() {
       returnKeyType: "go",
       onSubmitEditing: handleSignIn,
       placeholder: "Password",
+      accessibilityLabel: "Password",
+      accessibilityHint: "Enter your password. Press go to sign in.",
       style: {
         width: "100%",
         marginBottom: spacing.md,
@@ -175,11 +186,13 @@ export default function Landing() {
           },
           accessibilityLabel: showPassword ? "Hide password" : "Show password",
           accessibilityRole: "button",
+          accessibilityHint: showPassword ? "Tap to hide your password" : "Tap to show your password",
         },
         React.createElement(Ionicons, {
           name: showPassword ? "eye-off-outline" : "eye-outline",
           size: 20,
           color: colors.textSecondary,
+          accessible: false, // Icon is decorative, accessibility handled by Pressable
         }),
       ),
     }),
@@ -193,7 +206,7 @@ export default function Landing() {
       },
       accessibilityLabel: "Sign in to your account",
       accessibilityRole: "button",
-      accessibilityHint: "Sign in to your account to continue",
+      accessibilityHint: isLoading ? "Signing in, please wait" : "Sign in to your account to continue",
     }),
     React.createElement(Button, {
       onPress: () => router.push("/register"),
@@ -204,7 +217,7 @@ export default function Landing() {
       },
       accessibilityLabel: "Create an account",
       accessibilityRole: "button",
-      accessibilityHint: "Create an account to continue",
+      accessibilityHint: "Navigate to the registration screen to create a new account",
     })
   ),
   );

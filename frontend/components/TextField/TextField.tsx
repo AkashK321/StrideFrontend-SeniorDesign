@@ -132,7 +132,7 @@ const TextField = React.forwardRef<TextInput, TextFieldProps>(({
           onFocus: handleFocus,
           onBlur: handleBlur,
           accessibilityLabel: accessibilityLabel || label || placeholder,
-          accessibilityHint,
+          accessibilityHint: error ? `${accessibilityHint || ""} Error: ${error}`.trim() : accessibilityHint,
           accessibilityState: { disabled },
           style: [
             textFieldStyles.input,
@@ -164,6 +164,9 @@ const TextField = React.forwardRef<TextInput, TextFieldProps>(({
       Text,
       {
         style: textFieldStyles.errorText,
+        accessibilityRole: "alert",
+        accessibilityLiveRegion: "polite",
+        accessibilityLabel: `Error: ${error}`,
       },
       error,
     ),
