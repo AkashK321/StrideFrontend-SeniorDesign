@@ -5,8 +5,7 @@ import base64
 import os
 from pathlib import Path
 
-# CONFIGURATION
-WS_URL = "wss://yu7vqmtlqb.execute-api.us-east-1.amazonaws.com/prod"
+# # CONFIGURATION
 SCRIPT_DIR = Path(__file__).parent.absolute()
 # This builds the path: .../backend/tests/integration/test.jpg
 IMAGE_PATH = SCRIPT_DIR / "test.jpg"
