@@ -49,6 +49,13 @@ on:
     paths:
       - 'aws_resources/**'
       - '.github/workflows/**'
+
+# This is a test to see if the cleanup branch workflow works
+  push:
+    branches:
+      - 'fix/91-cleanup-permissions'
+    paths:
+      - '.github/workflows/cleanup-branch.yaml'
   
   workflow_dispatch:
     inputs:
