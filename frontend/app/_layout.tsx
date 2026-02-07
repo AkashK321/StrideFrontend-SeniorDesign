@@ -11,6 +11,7 @@ import * as React from "react";
 import { View, ActivityIndicator } from "react-native";
 import { Stack } from "expo-router";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useFonts, Roboto_400Regular, Roboto_700Bold, Roboto_300Light } from "@expo-google-fonts/roboto";
 import { AuthProvider, useAuth } from "../contexts/AuthContext";
 import { setupAutoRefresh } from "../services/tokenStorage";
@@ -50,6 +51,8 @@ function AppContent() {
   return React.createElement(Stack, {
     screenOptions: {
       headerShown: false,
+      gestureEnabled: true, // Enable swipe gestures in root stack
+      fullScreenGestureEnabled: true, // Enable full-screen gestures on iOS
     },
   });
 }
@@ -66,12 +69,18 @@ export default function RootLayout() {
   }
   
   return React.createElement(
-    SafeAreaProvider,
-    null,
+    GestureHandlerRootView,
+    {
+      style: { flex: 1 },
+    },
     React.createElement(
-      AuthProvider,
+      SafeAreaProvider,
       null,
-      React.createElement(AppContent),
+      React.createElement(
+        AuthProvider,
+        null,
+        React.createElement(AppContent),
+      ),
     ),
   );
 }
