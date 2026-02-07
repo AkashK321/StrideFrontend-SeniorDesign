@@ -61,7 +61,7 @@ cdk.out
 .gradle
 
 # Ignore Gradle build output directory
-aws_resources/backend/build
+build
 
 # Ignore the library folders installed by pip
 aws_resources/schema_initializer/pg8000/
