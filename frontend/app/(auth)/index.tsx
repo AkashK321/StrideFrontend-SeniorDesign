@@ -185,17 +185,17 @@ export default function Landing() {
       accessibilityRole: "button",
       accessibilityHint: "Sign in to your account to continue",
     }),
-    // React.createElement(Button, {
-    //   onPress: () => router.replace("/register"),
-    //   title: "Create an account",
-    //   variant: "secondary",
-    //   style: {
-    //     marginTop: spacing.md,
-    //   },
-    //   accessibilityLabel: "Create an account",
-    //   accessibilityRole: "button",
-    //   accessibilityHint: "Create an account to continue",
-    // })
+    React.createElement(Button, {
+      onPress: () => router.push("/register"),
+      title: "Create an account",
+      variant: "secondary",
+      style: {
+        marginTop: spacing.md,
+      },
+      accessibilityLabel: "Create an account",
+      accessibilityRole: "button",
+      accessibilityHint: "Create an account to continue",
+    })
   ),
   );
 }
