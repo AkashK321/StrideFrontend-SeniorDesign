@@ -21,6 +21,18 @@ export interface ApiError {
   error: string;
 }
 
+export interface RefreshTokenRequest {
+  refreshToken: string;
+}
+
+export interface RefreshTokenResponse {
+  accessToken: string;
+  idToken: string;
+  refreshToken: string;
+  expiresIn: number;
+  tokenType: string;
+}
+
 /**
  * Makes a POST request to the login endpoint.
  */
@@ -41,4 +53,35 @@ export async function login(credentials: LoginRequest): Promise<LoginResponse> {
   }
 
   return data as LoginResponse;
+}
+
+/**
+ * Refreshes authentication tokens using a refresh token.
+ * 
+ * Note: This endpoint may not be implemented yet. If the endpoint returns 404,
+ * the function will throw an error indicating the endpoint is not available.
+ * 
+ * @throws Error if the refresh endpoint is not available (404) or if refresh fails
+ */
+export async function refreshToken(refreshToken: string): Promise<RefreshTokenResponse> {
+  const response = await fetch(`${API_BASE_URL}/refresh`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ refreshToken }),
+  });
+
+  const data = await response.json();
+
+  if (response.status === 404) {
+    throw new Error("Refresh endpoint not implemented. Please log in again.");
+  }
+
+  if (!response.ok) {
+    const error: ApiError = data;
+    throw new Error(error.error || `Token refresh failed: ${response.statusText}`);
+  }
+
+  return data as RefreshTokenResponse;
 }

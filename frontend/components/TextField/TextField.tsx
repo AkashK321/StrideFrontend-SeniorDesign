@@ -23,7 +23,7 @@
  * @param inputStyle - Optional custom styles for the input (merged with defaults)
  */
 import * as React from "react";
-import { TextInput, Text, View, ViewStyle, TextStyle } from "react-native";
+import { TextInput, Text, View, ViewStyle, TextStyle, Pressable } from "react-native";
 import { textFieldStyles } from "./styles";
 import { colors } from "../../theme/colors";
 
@@ -42,6 +42,7 @@ export interface TextFieldProps {
   accessibilityHint?: string;
   style?: ViewStyle;
   inputStyle?: TextStyle;
+  rightIcon?: React.ReactNode;
 }
 
 export default function TextField({
@@ -59,6 +60,7 @@ export default function TextField({
   accessibilityHint,
   style,
   inputStyle,
+  rightIcon,
 }: TextFieldProps) {
   const [isFocused, setIsFocused] = React.useState(false);
   const inputRef = React.useRef<TextInput>(null);
@@ -99,32 +101,55 @@ export default function TextField({
         "*",
       ),
     ),
-    // Input
+    // Input container with optional right icon
     React.createElement(
-      TextInput,
+      View,
       {
-        ref: inputRef,
-        value,
-        onChangeText,
-        placeholder,
-        placeholderTextColor: colors.placeholder,
-        editable: !disabled,
-        secureTextEntry,
-        keyboardType,
-        autoCapitalize,
-        onFocus: handleFocus,
-        onBlur: handleBlur,
-        accessibilityLabel: accessibilityLabel || label || placeholder,
-        accessibilityHint,
-        accessibilityState: { disabled },
-        style: [
-          textFieldStyles.input,
-          isFocused && textFieldStyles.inputFocused,
-          error && textFieldStyles.inputError,
-          disabled && textFieldStyles.inputDisabled,
-          inputStyle,
-        ],
+        style: {
+          position: "relative",
+        },
       },
+      React.createElement(
+        TextInput,
+        {
+          ref: inputRef,
+          value,
+          onChangeText,
+          placeholder,
+          placeholderTextColor: colors.placeholder,
+          editable: !disabled,
+          secureTextEntry,
+          keyboardType,
+          autoCapitalize,
+          onFocus: handleFocus,
+          onBlur: handleBlur,
+          accessibilityLabel: accessibilityLabel || label || placeholder,
+          accessibilityHint,
+          accessibilityState: { disabled },
+          style: [
+            textFieldStyles.input,
+            isFocused && textFieldStyles.inputFocused,
+            error && textFieldStyles.inputError,
+            disabled && textFieldStyles.inputDisabled,
+            rightIcon ? { paddingRight: 48 } : undefined, // Add padding for icon
+            inputStyle,
+          ].filter(Boolean) as TextStyle[],
+        },
+      ),
+      rightIcon && React.createElement(
+        View,
+        {
+          style: {
+            position: "absolute",
+            right: 12,
+            top: 0,
+            bottom: 0,
+            justifyContent: "center",
+            alignItems: "center",
+          },
+        },
+        rightIcon,
+      ),
     ),
     // Error message
     error && React.createElement(

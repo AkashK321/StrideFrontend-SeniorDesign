@@ -9,9 +9,10 @@
  * alongside this screen in the (auth) directory.
  */
 import * as React from "react";
-import { View, Text, Alert } from "react-native";
+import { View, Text, Alert, Pressable, Keyboard, TouchableWithoutFeedback } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import Button from "../../components/Button";
 import TextField from "../../components/TextField";
 import Label from "../../components/Label";
@@ -19,14 +20,17 @@ import { spacing } from "../../theme/spacing";
 import { typography } from "../../theme/typography";
 import { colors } from "../../theme/colors";
 import { login } from "../../services/api";
+import { useAuth } from "../../contexts/AuthContext";
 
 export default function Landing() {
   const router = useRouter();
+  const { login: authLogin } = useAuth();
   const [username, setUsername] = React.useState("");
   const [usernameError, setUsernameError] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [passwordError, setPasswordError] = React.useState("");
   const [isLoading, setIsLoading] = React.useState(false);
+  const [showPassword, setShowPassword] = React.useState(false);
 
   const handleSignIn = async () => {
     // Clear previous errors
@@ -53,12 +57,14 @@ export default function Landing() {
         password: password.trim(),
       });
 
-      // Store tokens (you may want to use AsyncStorage or a state management solution)
-      // For now, we'll just navigate on success
-      console.log("Login successful:", response);
+      // Store tokens and update auth state
+      await authLogin({
+        accessToken: response.accessToken,
+        idToken: response.idToken,
+        refreshToken: response.refreshToken,
+      });
 
-      // Navigate to home on success
-      router.replace("/home");
+      // Navigation will be handled by AuthContext
     } catch (error) {
       // Handle error
       const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
@@ -78,18 +84,23 @@ export default function Landing() {
   };
 
   return React.createElement(
-    SafeAreaView,
+    TouchableWithoutFeedback,
     {
-      style: {
-        flex: 1,
-        justifyContent: "flex-start",
-        alignItems: "center",
-        gap: spacing.sm,
-        paddingTop: spacing.xl,
-        padding: spacing.xl,
-      },
-      edges: ["top", "bottom"],
+      onPress: Keyboard.dismiss,
     },
+    React.createElement(
+      SafeAreaView,
+      {
+        style: {
+          flex: 1,
+          justifyContent: "flex-start",
+          alignItems: "center",
+          gap: spacing.sm,
+          paddingTop: spacing.xl,
+          padding: spacing.xl,
+        },
+        edges: ["top", "bottom"],
+      },
     React.createElement(
       Text,
       {
@@ -138,13 +149,29 @@ export default function Landing() {
       value: password,
       onChangeText: setPassword,
       error: passwordError,
-      secureTextEntry: true,
+      secureTextEntry: !showPassword,
       autoCapitalize: "none",
       placeholder: "Password",
       style: {
         width: "100%",
         marginBottom: spacing.md,
       },
+      rightIcon: React.createElement(
+        Pressable,
+        {
+          onPress: () => setShowPassword(!showPassword),
+          style: {
+            padding: spacing.xs,
+          },
+          accessibilityLabel: showPassword ? "Hide password" : "Show password",
+          accessibilityRole: "button",
+        },
+        React.createElement(Ionicons, {
+          name: showPassword ? "eye-off-outline" : "eye-outline",
+          size: 20,
+          color: colors.textSecondary,
+        }),
+      ),
     }),
     React.createElement(Button, {
       onPress: handleSignIn,
@@ -157,7 +184,19 @@ export default function Landing() {
       accessibilityLabel: "Sign in to your account",
       accessibilityRole: "button",
       accessibilityHint: "Sign in to your account to continue",
-    })
+    }),
+    // React.createElement(Button, {
+    //   onPress: () => router.replace("/register"),
+    //   title: "Create an account",
+    //   variant: "secondary",
+    //   style: {
+    //     marginTop: spacing.md,
+    //   },
+    //   accessibilityLabel: "Create an account",
+    //   accessibilityRole: "button",
+    //   accessibilityHint: "Create an account to continue",
+    // })
+  ),
   );
 }
 
