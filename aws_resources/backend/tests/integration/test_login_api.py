@@ -29,7 +29,11 @@ def test_user_credentials():
     return {
         "username": f"testuser_{timestamp}_{random_suffix}",
         "password": "TestPass123!",
-        "email": f"test_{timestamp}_{random_suffix}@example.com"
+        "passwordConfirm": "TestPass123!",
+        "email": f"test_{timestamp}_{random_suffix}@example.com",
+        "phoneNumber": f"+1555{timestamp % 10000000:07d}",  # Generate unique phone number
+        "firstName": "Test",
+        "lastName": "User"
     }
 
 
@@ -40,7 +44,11 @@ def test_register_success(api_base_url, test_user_credentials):
         json={
             "username": test_user_credentials["username"],
             "password": test_user_credentials["password"],
-            "email": test_user_credentials["email"]
+            "passwordConfirm": test_user_credentials["passwordConfirm"],
+            "email": test_user_credentials["email"],
+            "phoneNumber": test_user_credentials["phoneNumber"],
+            "firstName": test_user_credentials["firstName"],
+            "lastName": test_user_credentials["lastName"]
         },
         headers={"Content-Type": "application/json"},
         timeout=10
@@ -50,6 +58,7 @@ def test_register_success(api_base_url, test_user_credentials):
     data = response.json()
     assert "message" in data
     assert "User registered successfully" in data["message"]
+    assert "username" in data
 
 
 def test_register_missing_fields(api_base_url):
@@ -93,7 +102,11 @@ def test_register_duplicate_username(api_base_url, test_user_credentials):
         json={
             "username": test_user_credentials["username"],
             "password": test_user_credentials["password"],
-            "email": test_user_credentials["email"]
+            "passwordConfirm": test_user_credentials["passwordConfirm"],
+            "email": test_user_credentials["email"],
+            "phoneNumber": test_user_credentials["phoneNumber"],
+            "firstName": test_user_credentials["firstName"],
+            "lastName": test_user_credentials["lastName"]
         },
         headers={"Content-Type": "application/json"},
         timeout=10
@@ -101,12 +114,17 @@ def test_register_duplicate_username(api_base_url, test_user_credentials):
     assert response1.status_code == 201
 
     # Try to register again with same username
+    timestamp = int(time.time())
     response2 = requests.post(
         f"{api_base_url}/register",
         json={
             "username": test_user_credentials["username"],
             "password": "DifferentPass123!",
-            "email": "different@example.com"
+            "passwordConfirm": "DifferentPass123!",
+            "email": f"different_{timestamp}@example.com",
+            "phoneNumber": f"+1555{timestamp % 10000000:07d}",
+            "firstName": "Different",
+            "lastName": "User"
         },
         headers={"Content-Type": "application/json"},
         timeout=10
@@ -126,7 +144,11 @@ def test_login_success(api_base_url, test_user_credentials):
         json={
             "username": test_user_credentials["username"],
             "password": test_user_credentials["password"],
-            "email": test_user_credentials["email"]
+            "passwordConfirm": test_user_credentials["passwordConfirm"],
+            "email": test_user_credentials["email"],
+            "phoneNumber": test_user_credentials["phoneNumber"],
+            "firstName": test_user_credentials["firstName"],
+            "lastName": test_user_credentials["lastName"]
         },
         headers={"Content-Type": "application/json"},
         timeout=10
@@ -213,7 +235,10 @@ def test_login_whitespace_normalization(api_base_url, test_user_credentials):
         json={
             "username": test_user_credentials["username"],
             "password": test_user_credentials["password"],
-            "email": test_user_credentials["email"]
+            "email": test_user_credentials["email"],
+            "phoneNumber": test_user_credentials["phoneNumber"],
+            "firstName": test_user_credentials["firstName"],
+            "lastName": test_user_credentials["lastName"]
         },
         headers={"Content-Type": "application/json"},
         timeout=10
@@ -244,9 +269,13 @@ def test_register_email_lowercase_normalization(api_base_url, test_user_credenti
     response = requests.post(
         f"{api_base_url}/register",
         json={
-            "username": test_user_credentials["username"],
+            "username": f"{test_user_credentials['username']}_email",
             "password": test_user_credentials["password"],
-            "email": uppercase_email
+            "passwordConfirm": test_user_credentials["passwordConfirm"],
+            "email": uppercase_email,
+            "phoneNumber": test_user_credentials["phoneNumber"],
+            "firstName": test_user_credentials["firstName"],
+            "lastName": test_user_credentials["lastName"]
         },
         headers={"Content-Type": "application/json"},
         timeout=10
@@ -264,9 +293,13 @@ def test_register_whitespace_normalization(api_base_url, test_user_credentials):
     response = requests.post(
         f"{api_base_url}/register",
         json={
-            "username": f"  {test_user_credentials['username']}  ",
+            "username": f"  {test_user_credentials['username']}_ws  ",
             "password": f"  {test_user_credentials['password']}  ",
-            "email": f"  {test_user_credentials['email']}  "
+            "passwordConfirm": f"  {test_user_credentials['password']}  ",
+            "email": f"  {test_user_credentials['email']}  ",
+            "phoneNumber": f"  {test_user_credentials['phoneNumber']}  ",
+            "firstName": f"  {test_user_credentials['firstName']}  ",
+            "lastName": f"  {test_user_credentials['lastName']}  "
         },
         headers={"Content-Type": "application/json"},
         timeout=10
