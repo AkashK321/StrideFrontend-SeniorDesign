@@ -1,0 +1,1690 @@
+openapi: 3.0.3
+info:
+  title: Stride API
+  description: |
+    REST API and WebSocket API for the Stride application. Provides authentication endpoints
+    for user login and registration using AWS Cognito, as well as indoor navigation endpoints
+    and WebSocket connections for live navigation updates.
+  version: 1.0.0
+  contact:
+    name: Stride Development Team
+
+servers:
+  - url: https://{apiId}.execute-api.{region}.amazonaws.com/prod
+    description: Production API Gateway REST endpoint
+  - url: wss://{wsApiId}.execute-api.{region}.amazonaws.com/prod
+    description: Production WebSocket API endpoint for live navigation and object detection
+
+tags:
+  - name: Authentication
+    description: User authentication and registration endpoints
+  - name: Items
+    description: Items endpoint (placeholder)
+  - name: Navigation
+    description: Indoor navigation and search endpoints
+
+paths:
+  /login:
+    post:
+      tags:
+        - Authentication
+      summary: User login
+      description: |
+        Authenticates a user with username and password using AWS Cognito.
+        Returns JWT tokens (access token, ID token, and refresh token) upon successful authentication.
+        
+        **Input Normalization:**
+        - Username and password are trimmed of leading/trailing whitespace
+        - Cognito handles all format validation
+        
+        **Error Handling:**
+        - Invalid credentials return 401
+        - Missing fields return 400
+        - Rate limiting returns 429
+        - Server errors return 500
+        
+        **Error Message Sanitization:**
+        - All error messages are sanitized to remove sensitive information (Request IDs, Service names, Status Codes)
+        - User-friendly messages are returned instead of raw Cognito error messages
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            examples:
+              validLogin:
+                summary: Valid login request
+                value:
+                  username: "johndoe"
+                  password: "SecurePass123!"
+      responses:
+        '200':
+          description: Successful authentication
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+              examples:
+                success:
+                  summary: Successful login response
+                  value:
+                    accessToken: "eyJraWQiOiJcL3Z..."
+                    idToken: "eyJraWQiOiJcL3Z..."
+                    refreshToken: "eyJjdHkiOiJKV1QiLCJlbmMiOiJBMjU2R0NNIn0..."
+                    expiresIn: 3600
+                    tokenType: "Bearer"
+        '400':
+          description: Bad request - missing or invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missingFields:
+                  summary: Missing required fields
+                  value:
+                    error: "Username and password are required"
+                invalidFormat:
+                  summary: Invalid JSON format
+                  value:
+                    error: "Invalid request format. Expected JSON with username and password"
+        '401':
+          description: Unauthorized - invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalidCredentials:
+                  summary: Invalid username or password
+                  value:
+                    error: "Invalid username or password"
+                userNotFound:
+                  summary: User does not exist
+                  value:
+                    error: "User not found"
+                challengeRequired:
+                  summary: Authentication challenge required
+                  value:
+                    error: "Authentication challenge required: NEW_PASSWORD_REQUIRED"
+        '429':
+          description: Too many requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                tooManyRequests:
+                  summary: Rate limit exceeded
+                  value:
+                    error: "Too many requests. Please try again later"
+        '403':
+          description: Forbidden - user account not confirmed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                notConfirmed:
+                  summary: User account not confirmed
+                  value:
+                    error: "User account is not confirmed"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                serverError:
+                  summary: Server configuration error
+                  value:
+                    error: "Server configuration error"
+                internalError:
+                  summary: Internal server error
+                  value:
+                    error: "Internal server error"
+
+  /register:
+    post:
+      tags:
+        - Authentication
+      summary: User registration
+      description: |
+        Registers a new user in AWS Cognito with username, password, email, phone number,
+        first name, and last name. All fields are required. The user is created with a permanent
+        password and can immediately log in.
+        
+        **Input Normalization:**
+        - Username is trimmed of leading/trailing whitespace
+        - Email is trimmed and converted to lowercase
+        - Phone number is trimmed and formatting characters are removed
+        - First name and last name are trimmed
+        - Password is trimmed
+        - Cognito handles all format validation
+        
+        **Error Handling:**
+        - Duplicate username or alias returns 409
+        - Invalid password format returns 400
+        - Missing required fields return 400
+        - Rate limiting returns 429
+        - Server errors return 500
+        
+        **Error Message Sanitization:**
+        - All error messages are sanitized to remove sensitive information (Request IDs, Service names, Status Codes)
+        - User-friendly messages are returned instead of raw Cognito error messages
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            examples:
+              validRegistration:
+                summary: Valid registration with all required fields
+                value:
+                  username: "johndoe"
+                  password: "SecurePass123!"
+                  passwordConfirm: "SecurePass123!"
+                  email: "john.doe@example.com"
+                  phoneNumber: "+1234567890"
+                  firstName: "John"
+                  lastName: "Doe"
+      responses:
+        '201':
+          description: User successfully registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+              examples:
+                success:
+                  summary: Successful registration
+                  value:
+                    message: "User registered successfully"
+        '400':
+          description: Bad request - missing fields, invalid input, or password requirements not met
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missingFields:
+                  summary: Missing required fields
+                  value:
+                    error: "Username, password, passwordConfirm, email, phoneNumber, firstName, and lastName are required"
+                invalidFormat:
+                  summary: Invalid JSON format
+                  value:
+                    error: "Invalid request format. Expected JSON with username, password, passwordConfirm, email, phoneNumber, firstName, and lastName"
+                passwordMismatch:
+                  summary: Passwords do not match
+                  value:
+                    error: "Passwords do not match"
+                usernameTooLong:
+                  summary: Username exceeds maximum length
+                  value:
+                    error: "Username must be 64 characters or less"
+                invalidPassword:
+                  summary: Password doesn't meet requirements
+                  value:
+                    error: "Password does not meet requirements"
+                invalidParameter:
+                  summary: Invalid parameter (sanitized message)
+                  value:
+                    error: "Invalid parameter provided"
+        '409':
+          description: Conflict - username or alias already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                duplicateUsername:
+                  summary: Username already exists
+                  value:
+                    error: "Username already exists"
+                duplicateAlias:
+                  summary: Email or phone already exists
+                  value:
+                    error: "An account with this email or phone number already exists"
+        '429':
+          description: Too many requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                tooManyRequests:
+                  summary: Rate limit exceeded
+                  value:
+                    error: "Too many requests. Please try again later"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                serverError:
+                  summary: Server configuration error
+                  value:
+                    error: "Server configuration error"
+                internalError:
+                  summary: Internal server error
+                  value:
+                    error: "Internal server error"
+
+  /register/verify-email:
+    post:
+      tags:
+        - Authentication
+      summary: Verify email address
+      description: |
+        **⚠️ NOT IMPLEMENTED YET**
+        
+        Verifies a user's email address using a verification code sent during registration.
+        Uses Cognito's `ConfirmSignUp` or `VerifyUserAttribute` API.
+      operationId: verifyEmail
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - code
+              properties:
+                username:
+                  type: string
+                  description: Username of the user to verify
+                  example: "johndoe"
+                code:
+                  type: string
+                  description: Verification code sent to the email
+                  example: "123456"
+      responses:
+        '200':
+          description: Email successfully verified
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Email verified successfully"
+        '400':
+          description: Bad request - invalid code or missing fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /register/verify-phone:
+    post:
+      tags:
+        - Authentication
+      summary: Verify phone number
+      description: |
+        **⚠️ NOT IMPLEMENTED YET**
+        
+        Verifies a user's phone number using a verification code sent via SMS.
+        Uses Cognito's `VerifyUserAttribute` API.
+      operationId: verifyPhone
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - code
+              properties:
+                username:
+                  type: string
+                  description: Username of the user to verify
+                  example: "johndoe"
+                code:
+                  type: string
+                  description: Verification code sent to the phone number
+                  example: "123456"
+      responses:
+        '200':
+          description: Phone number successfully verified
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Phone number verified successfully"
+        '400':
+          description: Bad request - invalid code or missing fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /register/resend-code:
+    post:
+      tags:
+        - Authentication
+      summary: Resend verification code
+      description: |
+        **⚠️ NOT IMPLEMENTED YET**
+        
+        Resends a verification code to the user's email or phone number.
+        Uses Cognito's `ResendConfirmationCode` API.
+      operationId: resendVerificationCode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - type
+              properties:
+                username:
+                  type: string
+                  description: Username of the user
+                  example: "johndoe"
+                type:
+                  type: string
+                  description: Type of verification code to resend
+                  enum:
+                    - email
+                    - phone
+                  example: "email"
+      responses:
+        '200':
+          description: Verification code resent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Verification code sent successfully"
+        '400':
+          description: Bad request - invalid type or missing fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Too many requests - rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /register/check-username:
+    get:
+      tags:
+        - Authentication
+      summary: Check username availability
+      description: |
+        **⚠️ NOT IMPLEMENTED YET**
+        
+        Checks if a username is available for registration.
+        Uses Cognito's `AdminGetUser` API to check if the username exists.
+      operationId: checkUsernameAvailability
+      parameters:
+        - name: username
+          in: query
+          required: true
+          description: Username to check
+          schema:
+            type: string
+            example: "johndoe"
+      responses:
+        '200':
+          description: Username availability check result
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - available
+                properties:
+                  available:
+                    type: boolean
+                    description: Whether the username is available
+                    example: true
+                  username:
+                    type: string
+                    description: The username that was checked
+                    example: "johndoe"
+        '400':
+          description: Bad request - missing username parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /register/check-email:
+    get:
+      tags:
+        - Authentication
+      summary: Check email uniqueness
+      description: |
+        **⚠️ NOT IMPLEMENTED YET**
+        
+        Checks if an email address is already registered.
+        Uses Cognito's `ListUsers` API with email filter to check for existing users.
+      operationId: checkEmailUniqueness
+      parameters:
+        - name: email
+          in: query
+          required: true
+          description: Email address to check
+          schema:
+            type: string
+            format: email
+            example: "john.doe@example.com"
+      responses:
+        '200':
+          description: Email uniqueness check result
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - available
+                properties:
+                  available:
+                    type: boolean
+                    description: Whether the email is available (not already registered)
+                    example: true
+                  email:
+                    type: string
+                    description: The email address that was checked
+                    example: "john.doe@example.com"
+        '400':
+          description: Bad request - missing email parameter or invalid format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /register/check-phone:
+    get:
+      tags:
+        - Authentication
+      summary: Check phone number uniqueness
+      description: |
+        **⚠️ NOT IMPLEMENTED YET**
+        
+        Checks if a phone number is already registered.
+        Uses Cognito's `ListUsers` API with phone number filter to check for existing users.
+      operationId: checkPhoneUniqueness
+      parameters:
+        - name: phoneNumber
+          in: query
+          required: true
+          description: Phone number in E.164 format to check
+          schema:
+            type: string
+            pattern: '^\+?[1-9]\d{1,14}$'
+            example: "+1234567890"
+      responses:
+        '200':
+          description: Phone number uniqueness check result
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - available
+                properties:
+                  available:
+                    type: boolean
+                    description: Whether the phone number is available (not already registered)
+                    example: true
+                  phoneNumber:
+                    type: string
+                    description: The phone number that was checked
+                    example: "+1234567890"
+        '400':
+          description: Bad request - missing phoneNumber parameter or invalid format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /refresh:
+    post:
+      tags:
+        - Authentication
+      summary: Refresh access and ID tokens
+      description: |
+        **⚠️ NOT IMPLEMENTED YET**
+        
+        Refreshes the access token and ID token using a valid refresh token.
+        Uses Cognito's `InitiateAuth` API with `REFRESH_TOKEN_AUTH` flow.
+      operationId: refreshToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - refreshToken
+              properties:
+                refreshToken:
+                  type: string
+                  description: Refresh token obtained from login
+                  example: "eyJjdHkiOiJKV1QiLCJlbmMiOiJBMjU2R0NNIn0..."
+      responses:
+        '200':
+          description: Tokens refreshed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+              examples:
+                success:
+                  summary: Successful token refresh
+                  value:
+                    accessToken: "eyJraWQiOiJcL3Z..."
+                    idToken: "eyJraWQiOiJcL3Z..."
+                    refreshToken: "eyJjdHkiOiJKV1QiLCJlbmMiOiJBMjU2R0NNIn0..."
+                    expiresIn: 3600
+                    tokenType: "Bearer"
+        '400':
+          description: Bad request - missing refresh token or invalid format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized - invalid or expired refresh token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /password/forgot:
+    post:
+      tags:
+        - Authentication
+      summary: Initiate password reset
+      description: |
+        **⚠️ NOT IMPLEMENTED YET**
+        
+        Initiates a password reset flow by sending a verification code to the user's
+        registered email or phone number. Uses Cognito's `ForgotPassword` API.
+      operationId: forgotPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+              properties:
+                username:
+                  type: string
+                  description: Username or email address of the user
+                  example: "johndoe"
+      responses:
+        '200':
+          description: Password reset code sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Password reset code sent to your registered email or phone"
+        '400':
+          description: Bad request - missing username or invalid format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Too many requests - rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /password/reset:
+    post:
+      tags:
+        - Authentication
+      summary: Reset password with verification code
+      description: |
+        **⚠️ NOT IMPLEMENTED YET**
+        
+        Resets the user's password using a verification code sent via email or SMS.
+        Uses Cognito's `ConfirmForgotPassword` API.
+      operationId: resetPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - code
+                - newPassword
+                - newPasswordConfirm
+              properties:
+                username:
+                  type: string
+                  description: Username or email address of the user
+                  example: "johndoe"
+                code:
+                  type: string
+                  description: Verification code sent to email or phone
+                  example: "123456"
+                newPassword:
+                  type: string
+                  description: New password (must meet Cognito password policy)
+                  format: password
+                  example: "NewSecurePass123!"
+                newPasswordConfirm:
+                  type: string
+                  description: Password confirmation (must match newPassword)
+                  format: password
+                  example: "NewSecurePass123!"
+      responses:
+        '200':
+          description: Password reset successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Password reset successfully"
+        '400':
+          description: Bad request - invalid code, password mismatch, or missing fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                passwordMismatch:
+                  summary: Passwords do not match
+                  value:
+                    error: "Passwords do not match"
+                invalidCode:
+                  summary: Invalid verification code
+                  value:
+                    error: "Invalid verification code"
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Too many requests - rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /password/change:
+    post:
+      tags:
+        - Authentication
+      summary: Change password (authenticated)
+      description: |
+        **⚠️ NOT IMPLEMENTED YET**
+        
+        Changes the authenticated user's password. Requires a valid access token.
+        Uses Cognito's `ChangePassword` API.
+      operationId: changePassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - currentPassword
+                - newPassword
+                - newPasswordConfirm
+              properties:
+                currentPassword:
+                  type: string
+                  description: User's current password
+                  format: password
+                  example: "OldSecurePass123!"
+                newPassword:
+                  type: string
+                  description: New password (must meet Cognito password policy)
+                  format: password
+                  example: "NewSecurePass123!"
+                newPasswordConfirm:
+                  type: string
+                  description: Password confirmation (must match newPassword)
+                  format: password
+                  example: "NewSecurePass123!"
+      responses:
+        '200':
+          description: Password changed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Password changed successfully"
+        '400':
+          description: Bad request - password mismatch, invalid current password, or missing fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                passwordMismatch:
+                  summary: Passwords do not match
+                  value:
+                    error: "Passwords do not match"
+                invalidCurrentPassword:
+                  summary: Invalid current password
+                  value:
+                    error: "Current password is incorrect"
+        '401':
+          description: Unauthorized - invalid or missing access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Too many requests - rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /items:
+    get:
+      tags:
+        - Items
+      summary: Get items
+      description: |
+        Placeholder endpoint for retrieving items. Implementation status may vary.
+        Returns 404 if not implemented.
+      operationId: getItems
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Hello from Kotlin"
+                  path:
+                    type: string
+                    example: "/items"
+        '404':
+          description: Endpoint not implemented
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /search:
+    get:
+      tags:
+        - Navigation
+      summary: Search landmarks
+      description: |
+        Searches landmarks (rooms, facilities) by name. Returns matching landmarks
+        with their floor number and nearest navigation node. The search is performed
+        on the `name` field in the Landmarks table using case-insensitive partial matching.
+        
+        **Implementation Notes:**
+        - Frontend should debounce search requests (e.g., 300ms delay) to reduce API calls
+        - Results are ordered by relevance (exact matches first, then partial matches)
+        - Query parameter must be at least 1 character
+      operationId: searchLandmarks
+      parameters:
+        - name: query
+          in: query
+          required: true
+          description: Search query (min 1 character). Searches the `name` field in the Landmarks table.
+          schema:
+            type: string
+            minLength: 1
+            example: "room 226"
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of results to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+            example: 10
+      responses:
+        '200':
+          description: Search completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponse'
+              examples:
+                success:
+                  summary: Successful search results
+                  value:
+                    results:
+                      - name: "Room 226"
+                        floor_number: 2
+                        nearest_node: "r226_door"
+                      - name: "Room 224"
+                        floor_number: 2
+                        nearest_node: "r224_door"
+                      - name: "Men's Restroom 219"
+                        floor_number: 2
+                        nearest_node: "r219_door"
+        '400':
+          description: Bad request - invalid or missing query parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missingQuery:
+                  summary: Missing query parameter
+                  value:
+                    error: "Query parameter 'query' is required and must be at least 1 character"
+                emptyQuery:
+                  summary: Empty query string
+                  value:
+                    error: "Query parameter 'query' is required and must be at least 1 character"
+        '401':
+          description: Unauthorized - missing or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                unauthorized:
+                  summary: Unauthorized request
+                  value:
+                    error: "Unauthorized"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                serverError:
+                  summary: Database or server error
+                  value:
+                    error: "Internal server error"
+
+  /navigation/start:
+    post:
+      tags:
+        - Navigation
+      summary: Start navigation to destination
+      description: |
+        Starts a navigation session by calculating the path from the user's specified start node
+        to the destination landmark. The backend uses A* pathfinding on MapNodes/MapEdges to
+        calculate the complete navigation path.
+        
+        **Pathfinding:**
+        - Uses A* algorithm on the navigation graph (MapEdges indexed by FloorID)
+        - Handles multi-floor paths via elevator/stair edges
+        - Returns complete path with all navigation instructions
+        
+        **Navigation Instructions:**
+        - Each step provides distance in feet and direction (north, south, east, west)
+        - Direction may be null for special cases like elevators or stairs
+        - Frontend is responsible for generating user-friendly instruction text from distance and direction
+        
+        **Coordinates:**
+        - All coordinates use feet (`x_feet`, `y_feet`)
+        - Node coordinates are at decision points (doors, intersections, corners, elevators, stairwells)
+        - Final destination coordinates are from the landmark's location
+      operationId: startNavigation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NavigationStartRequest'
+            examples:
+              validRequest:
+                summary: Valid navigation request
+                value:
+                  destination:
+                    landmark_id: "landmark_123"
+                  start_location:
+                    node_id: "staircase_main_2S01"
+      responses:
+        '200':
+          description: Navigation path calculated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NavigationStartResponse'
+              examples:
+                success:
+                  summary: Successful navigation path
+                  value:
+                    session_id: "nav_session_abc123"
+                    instructions:
+                      - step: 1
+                        distance_feet: 13.0
+                        direction: "west"
+                        node_id: "staircase_main_2S01"
+                        coordinates:
+                          x_feet: 0
+                          y_feet: 0
+                      - step: 2
+                        distance_feet: 0
+                        direction: "west"
+                        node_id: "stair_west_corner"
+                        coordinates:
+                          x_feet: -13
+                          y_feet: 0
+                      - step: 3
+                        distance_feet: 15.0
+                        direction: "west"
+                        node_id: "r226_door"
+                        coordinates:
+                          x_feet: -28
+                          y_feet: 0
+                      - step: 4
+                        distance_feet: 5.0
+                        direction: "south"
+                        node_id: "r226_door"
+                        coordinates:
+                          x_feet: -28
+                          y_feet: -5
+        '400':
+          description: Bad request - invalid destination or missing required fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missingFields:
+                  summary: Missing required fields
+                  value:
+                    error: "Destination and start_location.node_id are required"
+                invalidNodeId:
+                  summary: Invalid node ID
+                  value:
+                    error: "Invalid node ID in start_location"
+        '401':
+          description: Unauthorized - missing or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                unauthorized:
+                  summary: Unauthorized request
+                  value:
+                    error: "Unauthorized"
+        '404':
+          description: Destination not found or no path available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                destinationNotFound:
+                  summary: Destination landmark not found
+                  value:
+                    error: "Destination not found"
+                noPathAvailable:
+                  summary: No path available between start and destination
+                  value:
+                    error: "No path available to destination"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                serverError:
+                  summary: Server or pathfinding error
+                  value:
+                    error: "Internal server error"
+
+  /navigation/frame:
+    post:
+      tags:
+        - Navigation
+      summary: Send navigation frame (WebSocket)
+      description: |
+        **⚠️ WebSocket Endpoint - Not a REST endpoint**
+        
+        This is a WebSocket message exchange, not a traditional REST endpoint.
+        To use this:
+        
+        1. Connect to WebSocket: `wss://{wsApiId}.execute-api.{region}.amazonaws.com/prod`
+        2. Use route key: `"navigation"` (configured in AWS API Gateway)
+        3. Send `NavigationFrameMessage` as JSON via WebSocket
+        4. Receive `NavigationUpdateMessage` responses via WebSocket
+        
+        **Message Flow:**
+        - Client sends `NavigationFrameMessage` with camera frame and sensor data
+        - Server responds with `NavigationUpdateMessage` containing updated navigation instructions
+        - This exchange happens continuously while navigation is active (every 1-2 seconds)
+        
+        **Connection:**
+        - WebSocket URL: `wss://{wsApiId}.execute-api.{region}.amazonaws.com/prod`
+        - Route: `"navigation"` (configured in CDK stack)
+        - Protocol: JSON messages over WebSocket
+      operationId: sendNavigationFrame
+      requestBody:
+        required: true
+        description: Navigation frame message sent via WebSocket
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NavigationFrameMessage'
+            examples:
+              navigationFrame:
+                summary: Navigation frame with image and sensors
+                value:
+                  session_id: "nav_session_abc123"
+                  image_base64: "<base64-encoded-image>"
+                  heading_degrees: 270.0
+                  accelerometer:
+                    ax: 0.1
+                    ay: 0.0
+                    az: 9.8
+                  timestamp_ms: 1739052345123
+      responses:
+        '200':
+          description: Navigation update response (sent via WebSocket)
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/NavigationUpdateMessage'
+                  - $ref: '#/components/schemas/NavigationErrorMessage'
+                  - $ref: '#/components/schemas/NavigationCompleteMessage'
+              examples:
+                navigationUpdate:
+                  summary: Regular navigation update
+                  value:
+                    type: "navigation_update"
+                    session_id: "nav_session_abc123"
+                    current_step: 2
+                    remaining_instructions:
+                      - step: 2
+                        distance_feet: 5.0
+                        direction: "west"
+                        node_id: "stair_west_corner"
+                        coordinates:
+                          x_feet: -13
+                          y_feet: 0
+                    estimated_position:
+                      node_id: "stair_west_corner"
+                      coordinates:
+                        x_feet: -13
+                        y_feet: 0
+                    confidence: 0.87
+                navigationComplete:
+                  summary: Navigation completed
+                  value:
+                    type: "navigation_complete"
+                    session_id: "nav_session_abc123"
+                    message: "You have arrived at Room 226"
+                navigationError:
+                  summary: Navigation error
+                  value:
+                    type: "navigation_error"
+                    session_id: "nav_session_abc123"
+                    error: "Invalid or expired session_id"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT access token obtained from login endpoint
+  schemas:
+    LoginRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          description: User's username (will be trimmed)
+          example: "johndoe"
+          minLength: 1
+        password:
+          type: string
+          description: User's password (will be trimmed)
+          example: "SecurePass123!"
+          format: password
+          minLength: 1
+
+    LoginResponse:
+      type: object
+      required:
+        - accessToken
+        - idToken
+        - refreshToken
+        - expiresIn
+        - tokenType
+      properties:
+        accessToken:
+          type: string
+          description: JWT access token for API authentication
+          example: "eyJraWQiOiJcL3Z..."
+        idToken:
+          type: string
+          description: JWT ID token containing user identity information
+          example: "eyJraWQiOiJcL3Z..."
+        refreshToken:
+          type: string
+          description: Refresh token for obtaining new access tokens
+          example: "eyJjdHkiOiJKV1QiLCJlbmMiOiJBMjU2R0NNIn0..."
+        expiresIn:
+          type: integer
+          description: Token expiration time in seconds
+          example: 3600
+        tokenType:
+          type: string
+          description: Token type (always "Bearer" for Cognito)
+          example: "Bearer"
+          enum:
+            - Bearer
+
+    RegisterRequest:
+      type: object
+      required:
+        - username
+        - password
+        - passwordConfirm
+        - email
+        - phoneNumber
+        - firstName
+        - lastName
+      properties:
+        username:
+          type: string
+          description: Desired username (will be trimmed, must be unique, max 64 characters)
+          example: "johndoe"
+          minLength: 1
+          maxLength: 64
+        password:
+          type: string
+          description: User's password (will be trimmed, must meet Cognito password policy)
+          example: "SecurePass123!"
+          format: password
+          minLength: 1
+        passwordConfirm:
+          type: string
+          description: Password confirmation (must match password)
+          example: "SecurePass123!"
+          format: password
+          minLength: 1
+        email:
+          type: string
+          description: User's email address (will be trimmed and lowercased)
+          format: email
+          example: "john.doe@example.com"
+        phoneNumber:
+          type: string
+          description: |
+            Phone number in E.164 format (e.g., +1234567890).
+            Formatting characters will be removed automatically.
+          example: "+1234567890"
+          pattern: '^\+?[1-9]\d{1,14}$'
+          minLength: 1
+        firstName:
+          type: string
+          description: User's first name (will be trimmed)
+          example: "John"
+          minLength: 1
+        lastName:
+          type: string
+          description: User's last name (will be trimmed)
+          example: "Doe"
+          minLength: 1
+
+    RegisterResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          description: Success message
+          example: "User registered successfully"
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Error message describing what went wrong
+          example: "Invalid username or password"
+
+    SearchResponse:
+      type: object
+      required:
+        - results
+      properties:
+        results:
+          type: array
+          description: List of matching landmarks
+          items:
+            $ref: '#/components/schemas/LandmarkResult'
+
+    LandmarkResult:
+      type: object
+      required:
+        - name
+        - floor_number
+        - nearest_node
+      properties:
+        name:
+          type: string
+          description: Landmark name (e.g., "Room 226", "Men's Restroom 219")
+          example: "Room 226"
+        floor_number:
+          type: integer
+          description: Floor number where the landmark is located
+          example: 2
+        nearest_node:
+          type: string
+          description: Node ID of the nearest navigation node (used for pathfinding)
+          example: "r226_door"
+
+    NavigationStartRequest:
+      type: object
+      required:
+        - destination
+        - start_location
+      properties:
+        destination:
+          type: object
+          required:
+            - landmark_id
+          properties:
+            landmark_id:
+              type: string
+              description: ID of the destination landmark
+              example: "landmark_123"
+        start_location:
+          type: object
+          required:
+            - node_id
+          properties:
+            node_id:
+              type: string
+              description: Node ID where navigation starts
+              example: "staircase_main_2S01"
+
+    NavigationStartResponse:
+      type: object
+      required:
+        - session_id
+        - instructions
+      properties:
+        session_id:
+          type: string
+          description: Unique session ID for this navigation instance
+          example: "nav_session_abc123"
+        instructions:
+          type: array
+          description: List of turn-by-turn navigation instructions
+          items:
+            $ref: '#/components/schemas/NavigationInstruction'
+    NavigationInstruction:
+      type: object
+      required:
+        - step
+        - distance_feet
+        - direction
+        - node_id
+        - coordinates
+      properties:
+        step:
+          type: integer
+          description: Step number in the navigation sequence
+          example: 1
+        distance_feet:
+          type: number
+          description: Distance to travel in feet for this step
+          example: 13.0
+        direction:
+          type: string
+          nullable: true
+          description: |
+            Direction to walk for this step. Cardinal directions: "north", "south", "east", "west".
+            May be null for special cases like elevators or stairs where direction is not applicable.
+          enum:
+            - north
+            - south
+            - east
+            - west
+          example: "west"
+        node_id:
+          type: string
+          description: Node ID associated with this step
+          example: "staircase_main_2S01"
+        coordinates:
+          type: object
+          required:
+            - x_feet
+            - y_feet
+          description: Coordinates of this step in feet
+          properties:
+            x_feet:
+              type: number
+              description: X coordinate in feet
+              example: 0
+            y_feet:
+              type: number
+              description: Y coordinate in feet
+              example: 0
+
+    PathNode:
+      type: object
+      required:
+        - node_id
+        - coordinates
+      properties:
+        node_id:
+          type: string
+          description: Node ID
+          example: "staircase_main_2S01"
+        coordinates:
+          type: object
+          required:
+            - x_feet
+            - y_feet
+          description: Node coordinates in feet
+          properties:
+            x_feet:
+              type: number
+              description: X coordinate in feet
+              example: 0
+            y_feet:
+              type: number
+              description: Y coordinate in feet
+              example: 0
+
+    NavigationFrameMessage:
+      type: object
+      description: |
+        Client → Server WebSocket message for live navigation.
+        Sent on the WebSocket route (e.g., "navigation" or "frame") to provide a new
+        camera frame plus sensor data so the backend can localize the user and update
+        navigation instructions.
+        
+        **Note:** Routing is handled by AWS API Gateway WebSocket route keys configured
+        in the infrastructure (e.g., "navigation" route). The message itself does not
+        need an action field for routing.
+      required:
+        - session_id
+        - image_base64
+        - heading_degrees
+        - accelerometer
+      properties:
+        session_id:
+          type: string
+          description: Active navigation session ID from /navigation/start
+          example: "nav_session_abc123"
+        image_base64:
+          type: string
+          description: JPEG/PNG frame encoded as base64
+          format: byte
+          example: "<base64-encoded-image>"
+        heading_degrees:
+          type: number
+          description: |
+            User heading from device sensors, in degrees (0–360),
+            where 0/360 = north, 90 = east, 180 = south, 270 = west.
+          example: 270.0
+        accelerometer:
+          type: object
+          description: Raw accelerometer readings from the device
+          required:
+            - ax
+            - ay
+            - az
+          properties:
+            ax:
+              type: number
+              description: Acceleration on X axis (m/s^2)
+              example: 0.1
+            ay:
+              type: number
+              description: Acceleration on Y axis (m/s^2)
+              example: 0.0
+            az:
+              type: number
+              description: Acceleration on Z axis (m/s^2)
+              example: 9.8
+        timestamp_ms:
+          type: integer
+          description: Optional client-side timestamp in milliseconds since epoch
+          example: 1739052345123
+
+    NavigationUpdateMessage:
+      type: object
+      description: |
+        Server → Client WebSocket message containing an updated estimate of the
+        user's location and the remaining navigation instructions.
+      required:
+        - type
+        - session_id
+        - current_step
+        - remaining_instructions
+      properties:
+        type:
+          type: string
+          description: Message type
+          enum:
+            - navigation_update
+          example: "navigation_update"
+        session_id:
+          type: string
+          description: Navigation session ID
+          example: "nav_session_abc123"
+        current_step:
+          type: integer
+          description: Index (1-based) of the step the user is currently on
+          example: 2
+        remaining_instructions:
+          type: array
+          description: Updated instructions from the current step onward
+          items:
+            $ref: '#/components/schemas/NavigationInstruction'
+        estimated_position:
+          type: object
+          description: Backend's best estimate of the user's current position
+          required:
+            - node_id
+            - coordinates
+          properties:
+            node_id:
+              type: string
+              description: Closest navigation node to the estimated position
+              example: "stair_west_corner"
+            coordinates:
+              type: object
+              required:
+                - x_feet
+                - y_feet
+              properties:
+                x_feet:
+                  type: number
+                  description: Estimated X coordinate in feet
+                  example: -13
+                y_feet:
+                  type: number
+                  description: Estimated Y coordinate in feet
+                  example: 0
+        confidence:
+          type: number
+          description: Confidence in the localization result (0–1)
+          example: 0.87
+        message:
+          type: string
+          description: Optional text summary for debugging or logging
+          example: "You are near the west staircase intersection"
+
+    NavigationErrorMessage:
+      type: object
+      description: Server → Client WebSocket error message for navigation sessions.
+      required:
+        - type
+        - session_id
+        - error
+      properties:
+        type:
+          type: string
+          enum:
+            - navigation_error
+          example: "navigation_error"
+        session_id:
+          type: string
+          description: Navigation session ID associated with the error
+          example: "nav_session_abc123"
+        error:
+          type: string
+          description: Error message describing what went wrong
+          example: "Invalid or expired session_id"
+
+    NavigationCompleteMessage:
+      type: object
+      description: Server → Client WebSocket message indicating navigation is complete.
+      required:
+        - type
+        - session_id
+      properties:
+        type:
+          type: string
+          enum:
+            - navigation_complete
+          example: "navigation_complete"
+        session_id:
+          type: string
+          description: Navigation session ID
+          example: "nav_session_abc123"
+        message:
+          type: string
+          description: Optional human-readable completion message
+          example: "You have arrived at Room 226"
