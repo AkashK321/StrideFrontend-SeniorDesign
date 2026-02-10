@@ -44,7 +44,7 @@ class ObjectDetectionHandlerTest {
         // 2. Create the real handler instance with mocked dependencies
         val realHandler = ObjectDetectionHandler(
             heightTableClient = mockHeightDdb,
-            flagsTableClient = mockFeatureDdb,
+            featureFlagsTableClient = mockFeatureDdb,
             sagemakerClient = mockSageMaker,
             apiGatewayFactory = { _ -> mockApiGateway }
         )
